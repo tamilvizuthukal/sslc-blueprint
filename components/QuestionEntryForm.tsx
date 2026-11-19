@@ -6,6 +6,7 @@ import { getSettings, getDiscourses, getCurriculum, getDB, initDB, filterCurricu
 import QuestionRow from './QuestionRow';
 import { computeQuestionNumbersMap } from './BlueprintMatrix';
 import { sortBlueprintItems } from '../utils/reportCalculations';
+import { getDiscoursesForBlueprintItem } from '../utils/discourseFilters';
 
 
 export const QuestionEntryForm = ({ 
@@ -228,9 +229,7 @@ export const QuestionEntryForm = ({
     }, [activeItem, paperType]);
 
     const renderQuestionRow = (item: BlueprintItem) => {
-        const itemDiscourses = discourses.filter(d =>
-            d.subject === blueprint.subject && d.marks === item.marksPerQuestion
-        );
+        const itemDiscourses = getDiscoursesForBlueprintItem(discourses, blueprint.subject, item.marksPerQuestion);
         const originalIndex = sortedItems.findIndex(sortedItem => sortedItem.id === item.id);
         const section = paperType?.sections.find(s => s.id === item.sectionId);
         return (

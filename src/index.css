@@ -9,10 +9,39 @@
 }
 
 @font-face {
+  font-family: 'Times New Roman';
+  src: url('/fonts/times.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Times New Roman';
+  src: url('/fonts/timesbd.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Times New Roman';
+  src: url('/fonts/timesi.ttf') format('truetype');
+  font-weight: normal;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Times New Roman';
+  src: url('/fonts/timesbi.ttf') format('truetype');
+  font-weight: bold;
+  font-style: italic;
+}
+
+@font-face {
   font-family: 'TAU-Urai';
   src: url('/fonts/TAU-Urai.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
+  unicode-range: U+0B80-0BFF, U+200C-200D;
 }
 
 @font-face {
@@ -20,6 +49,15 @@
   src: url('/fonts/TAU-Urai%20Bold.ttf') format('truetype');
   font-weight: bold;
   font-style: normal;
+  unicode-range: U+0B80-0BFF, U+200C-200D;
+}
+
+@font-face {
+  font-family: 'TAU-Urai';
+  src: url('/fonts/TAU-Urai%20Italic.ttf') format('truetype');
+  font-weight: normal;
+  font-style: italic;
+  unicode-range: U+0B80-0BFF, U+200C-200D;
 }
 
 @font-face {
@@ -27,6 +65,7 @@
   src: url('/fonts/TAU-Paalai.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
+  unicode-range: U+0B80-0BFF, U+200C-200D;
 }
 
 @font-face {
@@ -34,10 +73,19 @@
   src: url('/fonts/TAU-Paalai%20Bold.ttf') format('truetype');
   font-weight: bold;
   font-style: normal;
+  unicode-range: U+0B80-0BFF, U+200C-200D;
+}
+
+@font-face {
+  font-family: 'TAU-Paalai';
+  src: url('/fonts/TAU-Paalai%20Italic.ttf') format('truetype');
+  font-weight: normal;
+  font-style: italic;
+  unicode-range: U+0B80-0BFF, U+200C-200D;
 }
 
 .tamil-heading-font {
-  font-family: 'TAU-Paalai', 'TAU-Urai Bold', 'TAU-Urai', serif;
+  font-family: 'Times New Roman', 'TAU-Urai', 'TAU-Paalai', serif;
   font-weight: 700;
 }
 

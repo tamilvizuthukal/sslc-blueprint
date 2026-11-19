@@ -852,6 +852,24 @@ app.use(async (req, res, next) => {
   }
 });
 
+let managedLocalBrowser = null;
+const closeManagedBrowser = async () => {
+  if (managedLocalBrowser && managedLocalBrowser.connected) {
+    try {
+      await managedLocalBrowser.close();
+    } catch (_) {}
+    managedLocalBrowser = null;
+  }
+};
+process.on('SIGINT', async () => {
+  await closeManagedBrowser();
+  process.exit(0);
+});
+process.on('SIGTERM', async () => {
+  await closeManagedBrowser();
+  process.exit(0);
+});
+
 const getBrowser = async () => {
   if (process.env.VERCEL) {
     // Set AWS environment variables programmatically based on actual Node.js version
@@ -929,13 +947,46 @@ const getBrowser = async () => {
       headless: chromium.headless,
     });
   }
-  // Local development: dynamically require puppeteer to prevent Vercel NFT bundling
+  // Local development: reuse managed browser instance to eliminate window pops and process churn
   const localPuppeteerName = 'puppeteer';
   const puppeteer = require(localPuppeteerName);
-  return await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  const configuredBrowserPath = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH;
+  const installedBrowserPaths = process.platform === 'win32'
+    ? [
+        configuredBrowserPath,
+        path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+        path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe')
+      ].filter(Boolean)
+    : [configuredBrowserPath].filter(Boolean);
+  let localExecutablePath = installedBrowserPaths.find(candidate => fs.existsSync(candidate));
+  if (!localExecutablePath) {
+    const puppeteerExecutablePath = puppeteer.executablePath();
+    if (fs.existsSync(puppeteerExecutablePath)) localExecutablePath = puppeteerExecutablePath;
+  }
+  if (managedLocalBrowser && managedLocalBrowser.connected) {
+    return managedLocalBrowser;
+  }
+  managedLocalBrowser = await puppeteer.launch({
+    headless: 'new',
+    ...(localExecutablePath ? { executablePath: localExecutablePath } : {}),
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+      '--hide-scrollbars',
+      '--no-first-run',
+      '--no-default-browser-check'
+    ]
   });
+  managedLocalBrowser.on('disconnected', () => {
+    managedLocalBrowser = null;
+  });
+  return managedLocalBrowser;
 };
 
 const resolveRequestOrigin = (req, fallbackBaseUrl) => {
@@ -1620,13 +1671,20 @@ app.get('/live-users', auth, adminAuth, async (req, res, next) => {
 
 // 7. Export
 app.post('/generate-pdf', auth, async (req, res, next) => {
-  const { html, orientation = 'portrait', filename = 'report.pdf', paperCode = '', canonicalPaper = false } = req.body;
+  let { html, orientation = 'portrait', filename = 'report.pdf', paperCode = '', canonicalPaper = false } = req.body;
   if (!html) return res.status(400).json({ error: '`html` field is required' });
 
   let browser = null;
+  let context = null;
+  let page = null;
   try {
     browser = await getBrowser();
-    const page = await browser.newPage();
+    if (browser.createBrowserContext && !process.env.VERCEL) {
+      context = await browser.createBrowserContext();
+      page = await context.newPage();
+    } else {
+      page = await browser.newPage();
+    }
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 2 });
     // Inject Base64 Fonts to guarantee rendering
     try {
@@ -1640,13 +1698,22 @@ app.post('/generate-pdf', auth, async (req, res, next) => {
       const tauUrai = getFontBase64('TAU-Urai.ttf');
       const tauUraiBold = getFontBase64('TAU-Urai Bold.ttf');
       const tauMarutham = getFontBase64('TAU-Marutham.ttf'); // Just in case
+      const times = getFontBase64('times.ttf');
+      const timesBold = getFontBase64('timesbd.ttf');
+      const timesItalic = getFontBase64('timesi.ttf');
+      const timesBoldItalic = getFontBase64('timesbi.ttf');
 
       let fontCss = '';
-      if (tauPaalai) fontCss += `@font-face { font-family: 'TAU-Paalai'; src: url(data:font/ttf;base64,${tauPaalai}) format('truetype'); font-weight: normal; font-style: normal; }\n`;
-      if (tauPaalaiBold) fontCss += `@font-face { font-family: 'TAU-Paalai'; src: url(data:font/ttf;base64,${tauPaalaiBold}) format('truetype'); font-weight: bold; font-style: normal; }\n`;
-      if (tauUrai) fontCss += `@font-face { font-family: 'TAU-Urai'; src: url(data:font/ttf;base64,${tauUrai}) format('truetype'); font-weight: normal; font-style: normal; }\n`;
-      if (tauUraiBold) fontCss += `@font-face { font-family: 'TAU-Urai'; src: url(data:font/ttf;base64,${tauUraiBold}) format('truetype'); font-weight: bold; font-style: normal; }\n`;
-      if (tauMarutham) fontCss += `@font-face { font-family: 'TAU-Marutham'; src: url(data:font/ttf;base64,${tauMarutham}) format('truetype'); font-weight: normal; font-style: normal; }\n`;
+      if (times) fontCss += `@font-face { font-family: 'Times New Roman'; src: url(data:font/truetype;charset=utf-8;base64,${times}) format('truetype'); font-weight: normal; font-style: normal; unicode-range: U+0000-024F, U+2000-206F, U+2070-209F, U+20A0-20CF, U+2100-214F, U+2200-22FF; }\n`;
+      if (timesBold) fontCss += `@font-face { font-family: 'Times New Roman'; src: url(data:font/truetype;charset=utf-8;base64,${timesBold}) format('truetype'); font-weight: bold; font-style: normal; unicode-range: U+0000-024F, U+2000-206F, U+2070-209F, U+20A0-20CF, U+2100-214F, U+2200-22FF; }\n`;
+      if (timesItalic) fontCss += `@font-face { font-family: 'Times New Roman'; src: url(data:font/truetype;charset=utf-8;base64,${timesItalic}) format('truetype'); font-weight: normal; font-style: italic; unicode-range: U+0000-024F, U+2000-206F, U+2070-209F, U+20A0-20CF, U+2100-214F, U+2200-22FF; }\n`;
+      if (timesBoldItalic) fontCss += `@font-face { font-family: 'Times New Roman'; src: url(data:font/truetype;charset=utf-8;base64,${timesBoldItalic}) format('truetype'); font-weight: bold; font-style: italic; unicode-range: U+0000-024F, U+2000-206F, U+2070-209F, U+20A0-20CF, U+2100-214F, U+2200-22FF; }\n`;
+
+      if (tauPaalai) fontCss += `@font-face { font-family: 'TAU-Paalai'; src: url(data:font/truetype;charset=utf-8;base64,${tauPaalai}) format('truetype'); font-weight: normal; font-style: normal; unicode-range: U+0B80-0BFF, U+200C-200D; }\n`;
+      if (tauPaalaiBold) fontCss += `@font-face { font-family: 'TAU-Paalai'; src: url(data:font/truetype;charset=utf-8;base64,${tauPaalaiBold}) format('truetype'); font-weight: bold; font-style: normal; unicode-range: U+0B80-0BFF, U+200C-200D; }\n`;
+      if (tauUrai) fontCss += `@font-face { font-family: 'TAU-Urai'; src: url(data:font/truetype;charset=utf-8;base64,${tauUrai}) format('truetype'); font-weight: normal; font-style: normal; unicode-range: U+0B80-0BFF, U+200C-200D; }\n`;
+      if (tauUraiBold) fontCss += `@font-face { font-family: 'TAU-Urai'; src: url(data:font/truetype;charset=utf-8;base64,${tauUraiBold}) format('truetype'); font-weight: bold; font-style: normal; unicode-range: U+0B80-0BFF, U+200C-200D; }\n`;
+      if (tauMarutham) fontCss += `@font-face { font-family: 'TAU-Marutham'; src: url(data:font/truetype;charset=utf-8;base64,${tauMarutham}) format('truetype'); font-weight: normal; font-style: normal; }\n`;
 
       if (fontCss) {
         html = html.replace('</head>', `<style>${fontCss}</style></head>`);
@@ -1697,10 +1764,18 @@ app.post('/generate-pdf', auth, async (req, res, next) => {
           font-family: 'TAU-Paalai', 'Times New Roman', serif !important;
         }
         
-        /* Question Block Integrity */
-        .question-block, tr, tbody, .avoid-break {
+        /* Question Block & Table Row Integrity */
+        tbody {
+          page-break-inside: auto !important;
+          break-inside: auto !important;
+        }
+        .question-block, tr.avoid-break, tbody.avoid-break, .avoid-break {
           page-break-inside: avoid !important;
           break-inside: avoid !important;
+        }
+        tr.allow-break, tbody.allow-break, .allow-break {
+          page-break-inside: auto !important;
+          break-inside: auto !important;
         }
         
         /* Widow/Orphan Control */
@@ -1720,7 +1795,7 @@ app.post('/generate-pdf', auth, async (req, res, next) => {
         
         /* Page Layout and Margins */
         @page {
-          margin: 20mm 15mm 18mm 15mm;
+          margin: 15mm 15mm 20mm 15mm;
         }
         .print-content, .pdf-page:first-of-type, .report-page:first-of-type {
           height: auto !important;
@@ -1753,7 +1828,9 @@ app.post('/generate-pdf', auth, async (req, res, next) => {
   } catch (err) {
     next(err);
   } finally {
-    if (browser) await browser.close();
+    if (page) await page.close().catch(() => {});
+    if (context) await context.close().catch(() => {});
+    if (process.env.VERCEL && browser) await browser.close().catch(() => {});
   }
 });
 
@@ -1783,12 +1860,19 @@ app.post('/export/pdf', auth, async (req, res, next) => {
   console.log('--------------------------------');
   
   let browser = null;
+  let context = null;
+  let page = null;
   try {
     const bp = await Blueprint.findOne({ id }).lean();
     if (!bp) return res.status(404).json({ error: 'Blueprint not found' });
     
     browser = await getBrowser();
-    const page = await browser.newPage();
+    if (browser.createBrowserContext && !process.env.VERCEL) {
+      context = await browser.createBrowserContext();
+      page = await context.newPage();
+    } else {
+      page = await browser.newPage();
+    }
     
     // Log console messages and errors from the page
     page.on('console', msg => console.log(`[PUPPETEER CONSOLE]: ${msg.text()}`));
@@ -1845,8 +1929,8 @@ app.post('/export/pdf', auth, async (req, res, next) => {
     
     // Wait for actual content to render
     try {
-      console.log(`[Individual PDF] Waiting for '.print-root' for ${id}...`);
-      await page.waitForSelector('.print-root', { timeout: 45000 });
+      console.log(`[Individual PDF] Waiting for '.print-content' for ${id}...`);
+      await page.waitForSelector('.print-content', { timeout: 45000 });
       // Wait for fonts (Tamil + English) to fully load
       await page.evaluateHandle('document.fonts.ready');
       // Extra delay for React hydration, font rendering, and layout shifts
@@ -1894,10 +1978,31 @@ app.post('/export/pdf', auth, async (req, res, next) => {
           font-family: 'TAU-Paalai', 'Times New Roman', serif !important;
         }
         
-        /* Question Block Integrity */
-        .question-block, tr, tbody, .avoid-break {
+        /* Question Block & Table Row Integrity */
+        tbody {
+          page-break-inside: auto !important;
+          break-inside: auto !important;
+        }
+        .question-block, tr.avoid-break, tbody.avoid-break, .avoid-break {
           page-break-inside: avoid !important;
           break-inside: avoid !important;
+        }
+        tr.allow-break, tbody.allow-break, .allow-break {
+          page-break-inside: auto !important;
+          break-inside: auto !important;
+        }
+
+        .print-content, .report2-container {
+          display: block !important;
+          width: 100% !important;
+        }
+        .page-break-before {
+          break-before: page !important;
+          page-break-before: always !important;
+        }
+        .page-break-after {
+          break-after: page !important;
+          page-break-after: always !important;
         }
         
         /* Widow/Orphan Control */
@@ -1915,18 +2020,10 @@ app.post('/export/pdf', auth, async (req, res, next) => {
           height: 0 !important;
         }
         
-        /* Safe Print Area spacing */
-        .report-page, .pdf-page {
-          padding-top: 5mm !important;
-          padding-bottom: 5mm !important;
-        }
-
         /* Page Layout and Margins */
         @page {
-          margin: 15mm 15mm 20mm 18mm;
+          margin: 15mm 15mm 20mm 15mm;
         }
-
-
       `
     });
 
@@ -1942,7 +2039,7 @@ app.post('/export/pdf', auth, async (req, res, next) => {
       displayHeaderFooter: true,
       headerTemplate: `<span></span>`,
       footerTemplate: `
-        <div style="width: 100%; font-size: 10pt; font-family: 'Times New Roman', serif; padding: 0 15mm 0 18mm; box-sizing: border-box; overflow: hidden; height: 12mm; display: flex; flex-direction: column; justify-content: flex-start; color: #000;">
+        <div style="width: 100%; font-size: 10pt; font-family: 'Times New Roman', serif; padding: 0 15mm; box-sizing: border-box; overflow: hidden; height: 12mm; display: flex; flex-direction: column; justify-content: flex-start; color: #000;">
           <div style="border-top: 1px solid #000000; width: 100%; margin-bottom: 4px;"></div>
           <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
             <span style="font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${paperCode}</span>
@@ -1957,7 +2054,9 @@ app.post('/export/pdf', auth, async (req, res, next) => {
   } catch (err) { 
     next(err); 
   } finally {
-    if (browser) await browser.close();
+    if (page) await page.close().catch(() => {});
+    if (context) await context.close().catch(() => {});
+    if (process.env.VERCEL && browser) await browser.close().catch(() => {});
   }
 });
 

@@ -54,7 +54,11 @@ export const normalizeValue = (
 ): string => {
     if (!stored) return '';
     const s = stored.toString().trim().toLowerCase();
-    const clean = (str: string) => str.replace(/[^a-z0-9]/g, '');
+    // Cognitive process codes use Unicode subscript digits (for example CP₁).
+    // Convert them before removing punctuation so CP₁ normalizes to CP1.
+    const clean = (str: string) => str
+        .replace(/[₀-₉]/g, digit => String.fromCharCode(digit.charCodeAt(0) - 0x2080 + 0x30))
+        .replace(/[^a-z0-9]/g, '');
     const sClean = clean(s);
     
     // 1. Exact match with value (clean)

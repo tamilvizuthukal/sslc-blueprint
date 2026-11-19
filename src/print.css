@@ -79,20 +79,32 @@
   .flex-1,
   .overflow-auto,
   .overflow-x-auto,
-  .overflow-y-auto {
+  .overflow-y-auto,
+  .print-content,
+  .report2-container {
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
     overflow: visible !important;
     height: auto !important;
-    width: auto !important;
+    width: 100% !important;
     display: block !important;
     position: static !important;
   }
 
+  .page-break-before {
+    break-before: page !important;
+    page-break-before: always !important;
+  }
+
+  .page-break-after {
+    break-after: page !important;
+    page-break-after: always !important;
+  }
+
   @page {
     size: auto;
-    margin: 20mm 15mm 18mm 15mm;
+    margin: 15mm 15mm 20mm 15mm;
   }
 
   body, html {
@@ -161,9 +173,32 @@
     margin: 0 !important;
   }
 
-  tr, tbody.avoid-break, .avoid-break {
+  /* Keep each logical table row intact while allowing the table itself to flow. */
+  tr {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+  }
+
+  /* A section heading should stay with the first content that follows it. */
+  h1, h2, h3, h4 {
+    page-break-after: avoid !important;
+    break-after: avoid-page !important;
+  }
+
+  tbody {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  tr.avoid-break, tbody.avoid-break, .avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: auto;
+  }
+
+  tr.allow-break, tbody.allow-break, .allow-break {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
     page-break-after: auto;
   }
 

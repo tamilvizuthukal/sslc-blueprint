@@ -6,6 +6,9 @@ echo Configuring git...
 git config user.email "dsavio83@gmail.com"
 git config user.name "dsavio83"
 
+echo Configuring destination repository...
+git remote set-url origin https://github.com/dsavio83/SSLC-Blueprint.git
+
 echo Staging changes...
 git add .
 
@@ -13,7 +16,7 @@ echo Committing...
 git commit -m "%commit_msg%"
 
 echo Pushing to GitHub...
-git push origin main
+git push -u origin main
 
 echo Done!
 pause

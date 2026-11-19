@@ -1,6 +1,5 @@
 import React from 'react';
 import { Blueprint } from '../types';
-import { ReportHeader } from './reports/ReportHeader';
 import { formatMark } from '../services/reportUtils';
 import { ReportData } from '../hooks/useReportData';
 
@@ -13,6 +12,8 @@ interface Report3Props {
  * Report3: Unit Wise Analysis
  * 
  * Features:
+ * - Table content only (all top headers removed)
+ * - Enforced A4 Landscape mode for screen and print
  * - Aggregated Internal Choice rows at unit end
  * - Internal choices highlighted in light gray
  * - Choice items excluded from totals/time counts
@@ -127,14 +128,33 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
     return (
         <div className="report3-container w-full">
             <div className="report-page bg-white p-[15mm] print:p-0 text-black shadow-lg mx-auto relative landscape" 
-                 style={{ width: '297mm', boxSizing: 'border-box' }}>
+                 style={{ width: '297mm', minHeight: '210mm', boxSizing: 'border-box' }}>
                 
-                <div style={{ breakAfter: 'avoid', pageBreakAfter: 'avoid' }}>
-                    <ReportHeader blueprint={blueprint} sectionTitle="PART – II : UNIT WISE ANALYSIS" orientation="landscape" />
-                </div>
-                 <table className="w-full border-collapse border-2 border-black mt-4" 
-                       style={{ tableLayout: 'fixed', width: '100%', fontSize: `${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt`, pageBreakBefore: 'avoid', breakBefore: 'avoid' }}>
-                    <colgroup><col style={{ width: '75px' }} /><col style={{ width: '150px' }} /><col style={{ width: '100px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /></colgroup>
+                <table className="w-full border-collapse border-2 border-black" 
+                       style={{ tableLayout: 'fixed', width: '100%', fontSize: `${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt` }}>
+                    <colgroup>
+                        <col style={{ width: '75px' }} />
+                        <col style={{ width: '150px' }} />
+                        <col style={{ width: '100px' }} />
+                        <col style={{ width: '32px' }} />
+                        <col style={{ width: '32px' }} />
+                        <col style={{ width: '32px' }} />
+                        <col style={{ width: '32px' }} />
+                        <col style={{ width: '32px' }} />
+                        <col style={{ width: '32px' }} />
+                        <col style={{ width: '32px' }} />
+                        <col style={{ width: '32px' }} />
+                        <col style={{ width: '32px' }} />
+                        <col style={{ width: '32px' }} />
+                        <col style={{ width: '36px' }} />
+                        <col style={{ width: '36px' }} />
+                        <col style={{ width: '36px' }} />
+                        <col style={{ width: '36px' }} />
+                        <col style={{ width: '36px' }} />
+                        <col style={{ width: '36px' }} />
+                        <col style={{ width: '36px' }} />
+                        <col style={{ width: '36px' }} />
+                    </colgroup>
                     <thead>
                         <tr className="bg-transparent">
                             <th colSpan={3} className="border border-black p-1 text-[10pt] font-bold">Content Area</th>
@@ -146,7 +166,7 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
                             <th rowSpan={2} className="border border-black" style={narrowThStyle}>Total<br />Score</th>
                         </tr>
                         <tr className="bg-transparent">
-                            <th className="border border-black p-1 text-[10pt] font-bold">Topic / Unit / Chapter</th>
+                            <th className="border border-black p-1 text-[10pt] font-bold" style={{ whiteSpace: 'normal', overflowWrap: 'break-word' }}>Topic / Unit / Chapter</th>
                             <th className="border border-black p-1 text-[10pt] font-normal" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>Learning Objective</th>
                             <th className="border border-black p-1 text-[10pt] font-normal">Sub Topic / Sub Unit / Discourse</th>
                             
@@ -187,7 +207,9 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
                                         {subIdx === 0 && (
                                             <>
                                                 <td rowSpan={rowCount} className="border border-black p-1 text-left font-bold tamil-font" style={{ fontSize: `${settings.fontSizeTamil || 7}pt`, wordBreak: 'break-word' }}>
-                                                    {unit.unitNumber}. {unit.unitName}
+                                                    <span style={{ display: 'inline-block', transform: 'rotate(90deg)', whiteSpace: 'nowrap' }}>
+                                                        {unit.unitNumber}. {unit.unitName}
+                                                    </span>
                                                 </td>
                                                 <td rowSpan={rowCount} className="border border-black" style={contentCellStyle}>
                                                     {unit.learningObjective}
@@ -370,6 +392,9 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
                 }
 
                 @media print {
+                    @page {
+                        size: A4 landscape;
+                    }
                     .report-page {
                         box-shadow: none !important;
                         margin: 0 !important;

@@ -121,6 +121,24 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
         }
     };
 
+    const handleConfirmBlueprint = async () => {
+        if (!viewingBlueprint) return;
+        const previous = viewingBlueprint;
+        const confirmed = { ...previous, isConfirmed: true };
+        setViewingBlueprint(confirmed);
+        setIsSaving(true);
+        try {
+            await saveBlueprint(confirmed);
+            await Swal.fire("Confirmed", "Blueprint pattern confirmed successfully!", "success");
+        } catch (error) {
+            setViewingBlueprint(previous);
+            const reason = error instanceof Error ? error.message : 'Could not save blueprint confirmation.';
+            await Swal.fire('Confirmation failed', reason, 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const handleConfirmQuestions = async () => {
         if (!viewingBlueprint) return;
         const confirmed = { ...viewingBlueprint, isQuestionConfirmed: true };
@@ -289,7 +307,7 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
                     onMoveItem={handleMoveItem} 
                     onSave={handleSaveBlueprint}
                     onRegenerate={handleRegenerateBlueprint} 
-                    onConfirm={async () => {}}
+                    onConfirm={handleConfirmBlueprint}
                     onConfirmQuestions={handleConfirmQuestions}
                     onConfirmAnswerKey={handleConfirmAnswerKey}
                     onConfirmReport={handleConfirmReport}
