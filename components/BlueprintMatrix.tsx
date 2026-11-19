@@ -1,19 +1,38 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, CheckCircle, AlertTriangle, ChevronDown, ChevronUp, Info, RefreshCw, ClipboardCheck, Save, Sparkles, Plus, Settings, Trash2 } from 'lucide-react';
+import {
+  X,
+  CheckCircle,
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  RefreshCw,
+  ClipboardCheck,
+  Save,
+  Sparkles,
+  Settings,
+  Clock,
+  Move,
+  Maximize2,
+  Minimize2,
+  RotateCw,
+  GripVertical,
+  Pencil,
+} from 'lucide-react';
 import Swal from 'sweetalert2';
-import { 
-  KnowledgeLevel, 
-  ItemFormat, 
-  CognitiveProcess, 
-  Blueprint, 
-  Curriculum, 
-  BlueprintItem, 
+import {
+  KnowledgeLevel,
+  ItemFormat,
+  CognitiveProcess,
+  Blueprint,
+  Curriculum,
+  BlueprintItem,
   QuestionPatternSection as PaperSection,
   QuestionPaperType as PaperType,
   Discourse,
   Unit,
-  } from '@/types';
+} from '@/types';
 
 import { sortBlueprintItems } from '../utils/reportCalculations';
 import { getDB, getTermConfiguration } from '../services/db';
@@ -56,17 +75,27 @@ export function computeQuestionNumbersMap(
       sectionLocalOffset += count;
     });
 
-    // Each section's block starts at its designated offset
     currentStartNumber += (section.count || 0);
   });
 
   return map;
 }
 
+// ─── Default Answering Time Helper ───────────────────────────────────────────
+export function getDefaultQuestionTime(marksPerQuestion: number, questionCount: number = 1): number {
+  const perQuestion =
+    marksPerQuestion <= 1 ? 2 :
+    marksPerQuestion === 2 ? 4 :
+    marksPerQuestion === 3 ? 6 :
+    marksPerQuestion === 4 ? 8 :
+    marksPerQuestion === 5 ? 10 :
+    marksPerQuestion === 6 ? 12 :
+    Math.round(marksPerQuestion * 2);
+  return perQuestion * Math.max(1, questionCount);
+}
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-/** Bloom's KL weightage targets — computed per totalMarks in validation */
 const KL_TARGETS: Record<KnowledgeLevel, number> = {
   [KnowledgeLevel.BASIC]: 0.30,
   [KnowledgeLevel.AVERAGE]: 0.50,
@@ -80,15 +109,15 @@ const KL_COLORS: Record<KnowledgeLevel, { bg: string; border: string; text: stri
 };
 
 const MARK_COLORS: Record<number, string> = {
-  1: 'bg-blue-100 border-blue-400 text-blue-900',
-  2: 'bg-emerald-100 border-emerald-400 text-emerald-900',
-  3: 'bg-amber-100 border-amber-400 text-amber-900',
-  4: 'bg-indigo-100 border-indigo-400 text-indigo-900',
-  5: 'bg-rose-100 border-rose-400 text-rose-900',
-  6: 'bg-teal-100 border-teal-400 text-teal-900',
-  7: 'bg-purple-100 border-purple-400 text-purple-900',
-  8: 'bg-fuchsia-100 border-fuchsia-400 text-fuchsia-900',
-  10: 'bg-pink-100 border-pink-400 text-pink-900',
+  1: 'bg-blue-50 border-blue-300 text-blue-950',
+  2: 'bg-emerald-50 border-emerald-300 text-emerald-950',
+  3: 'bg-amber-50 border-amber-300 text-amber-950',
+  4: 'bg-indigo-50 border-indigo-300 text-indigo-950',
+  5: 'bg-rose-50 border-rose-300 text-rose-950',
+  6: 'bg-teal-50 border-teal-300 text-teal-950',
+  7: 'bg-purple-50 border-purple-300 text-purple-950',
+  8: 'bg-fuchsia-50 border-fuchsia-300 text-fuchsia-950',
+  10: 'bg-pink-50 border-pink-300 text-pink-950',
 };
 
 const KL_BOTTOM_COLORS: Record<KnowledgeLevel, string> = {
@@ -99,7 +128,6 @@ const KL_BOTTOM_COLORS: Record<KnowledgeLevel, string> = {
 
 // ─── Language Subject Helper ─────────────────────────────────────────────────
 
-/** Subject classification is used for curriculum-specific controls. */
 const LANGUAGE_KEYWORDS = [
   'tamil', 'english', 'hindi', 'sanskrit', 'french', 'urdu',
   'arabic', 'telugu', 'kannada', 'malayalam', 'language', 'மொழி', 'lang'
@@ -110,12 +138,12 @@ export const isLanguageSubject = (subject: string): boolean => {
   return LANGUAGE_KEYWORDS.some(kw => lower.includes(kw));
 };
 
-/** All configured cognitive processes are available for every subject. */
 const getAllowedCPs = (_subject?: string): CognitiveProcess[] => Object.values(CognitiveProcess);
 
 const DEFAULT_ALLOWED_CP = CognitiveProcess.CP1;
 
-const formatMatrixMark = (value: number): string => value === 0.5 ? '½' : Number.isInteger(value) ? String(value) : value % 1 === 0.5 ? `${Math.floor(value)}½` : String(value);
+const formatMatrixMark = (value: number): string =>
+  value === 0.5 ? '½' : Number.isInteger(value) ? String(value) : value % 1 === 0.5 ? `${Math.floor(value)}½` : String(value);
 
 const getSafeCP = (value?: CognitiveProcess): CognitiveProcess => {
   if (value) return value;
@@ -123,12 +151,13 @@ const getSafeCP = (value?: CognitiveProcess): CognitiveProcess => {
 };
 
 const getPreferredKLs = (mark: number): KnowledgeLevel[] => {
-  // All 3 KLs are now allowed for all mark values including 1M
   if (mark === 1) return [KnowledgeLevel.BASIC, KnowledgeLevel.AVERAGE, KnowledgeLevel.PROFOUND];
   if (mark <= 2) return [KnowledgeLevel.BASIC, KnowledgeLevel.AVERAGE];
   if (mark === 3) return [KnowledgeLevel.AVERAGE, KnowledgeLevel.BASIC, KnowledgeLevel.PROFOUND];
   return [KnowledgeLevel.PROFOUND, KnowledgeLevel.AVERAGE];
 };
+
+// ─── RelativeSelect (Scroll-Safe inside Modals) ──────────────────────────────
 
 interface RelativeSelectOption {
   value: string;
@@ -155,12 +184,7 @@ const RelativeSelect: React.FC<RelativeSelectProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const normalizedOptions = useMemo((): RelativeSelectOption[] => {
-    return options.map(opt => {
-      if (typeof opt === 'string') {
-        return { value: opt, label: opt };
-      }
-      return opt;
-    });
+    return options.map(opt => (typeof opt === 'string' ? { value: opt, label: opt } : opt));
   }, [options]);
 
   const selectedOption = useMemo(() => {
@@ -173,39 +197,24 @@ const RelativeSelect: React.FC<RelativeSelectProps> = ({
       const viewportHeight = window.innerHeight;
       const spaceBelow = viewportHeight - rect.bottom;
       const spaceAbove = rect.top;
-      // Dropdown has max-height of 200px. Let's use 210px as threshold.
-      if (spaceBelow < 210 && spaceAbove > spaceBelow) {
-        setOpenUpwards(true);
-      } else {
-        setOpenUpwards(false);
-      }
+      setOpenUpwards(spaceBelow < 180 && spaceAbove > spaceBelow);
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen) {
-      const handleOutsideClick = (e: MouseEvent) => {
-        if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-          setIsOpen(false);
-        }
-      };
-      document.addEventListener('mousedown', handleOutsideClick);
-      return () => {
-        document.removeEventListener('mousedown', handleOutsideClick);
-      };
-    }
+    if (!isOpen) return;
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
   }, [isOpen]);
-
-  const toggleDropdown = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsOpen(!isOpen);
-  };
-
-  const handleSelect = (val: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    onChange(val);
-    setIsOpen(false);
-  };
 
   const focusColor = themeColor === 'purple' ? 'focus:ring-purple-400 border-purple-200' : 'focus:ring-indigo-400 border-indigo-200';
   const buttonBorder = themeColor === 'purple' ? 'border-purple-300 hover:border-purple-400' : 'border-slate-300 hover:border-slate-400';
@@ -216,22 +225,33 @@ const RelativeSelect: React.FC<RelativeSelectProps> = ({
     <div className="relative w-full" ref={containerRef}>
       <button
         type="button"
-        onClick={toggleDropdown}
-        className={`w-full flex items-center justify-between bg-white text-slate-800 text-xs border ${buttonBorder} rounded-lg p-2 text-left shadow-sm focus:outline-none focus:ring-2 ${focusColor} transition-all cursor-pointer ${className}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(prev => !prev);
+        }}
+        className={`w-full flex items-center justify-between bg-white text-slate-800 text-xs border ${buttonBorder} rounded-lg px-2.5 py-2 text-left shadow-sm focus:outline-none focus:ring-2 ${focusColor} transition-all cursor-pointer ${className}`}
       >
         <span className="truncate font-medium">{selectedOption?.label}</span>
-        <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown size={14} className={`shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className={`absolute left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50 max-h-[200px] overflow-y-auto custom-scrollbar ${openUpwards ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+        <div
+          className={`absolute left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-[60] max-h-[165px] overflow-y-auto overscroll-contain custom-scrollbar ${
+            openUpwards ? 'bottom-full mb-1' : 'top-full mt-1'
+          }`}
+        >
           {normalizedOptions.map(opt => {
             const isSelected = opt.value === value;
             return (
               <button
                 key={opt.value}
                 type="button"
-                onClick={(e) => handleSelect(opt.value, e)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange(opt.value);
+                  setIsOpen(false);
+                }}
                 className={`w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer block truncate ${
                   isSelected ? activeText : 'text-slate-600 ' + hoverBg
                 }`}
@@ -245,6 +265,8 @@ const RelativeSelect: React.FC<RelativeSelectProps> = ({
     </div>
   );
 };
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const computeExactKlTargets = (totalMarks: number): Record<KnowledgeLevel, number> => {
   const exactEntries = ([
@@ -286,6 +308,10 @@ const sanitizeBlueprintItem = (item: BlueprintItem): Partial<BlueprintItem> => {
 
   if (item.cognitiveProcess !== safeCP) patch.cognitiveProcess = safeCP;
   if ((item.cognitiveProcessB || item.cognitiveProcess) !== safeCPB) patch.cognitiveProcessB = safeCPB;
+
+  if (item.time === undefined || item.time === null || isNaN(Number(item.time))) {
+    patch.time = getDefaultQuestionTime(item.marksPerQuestion, item.questionCount);
+  }
 
   if (item.marksPerQuestion === 1 && item.hasInternalChoice) {
     patch.hasInternalChoice = false;
@@ -374,11 +400,7 @@ const assignKnowledgeLevelsExactly = (items: BlueprintItem[], totalMarks: number
     const mark = entry.item.totalMarks;
     const choice = getPreferredKLs(entry.item.marksPerQuestion)
       .slice()
-      .sort((a, b) => {
-        const aGap = targets[a] - running[a];
-        const bGap = targets[b] - running[b];
-        return bGap - aGap;
-      })[0];
+      .sort((a, b) => (targets[b] - running[b]) - (targets[a] - running[a]))[0];
     running[choice] += mark;
     result[entry.index].knowledgeLevel = choice;
     if (result[entry.index].hasInternalChoice) {
@@ -405,6 +427,7 @@ interface ValidationResult {
   sectionSummary: { sectionId: string; marks: number; count: number; filled: number }[];
   orStatus: Record<string, { filled: number; required: number; label: string }>;
   grandTotal: number;
+  grandTime: number;
   isValid: boolean;
   subUnitCoverage: { unitId: string; subUnitId: string; marks: number; pct: number }[];
   analytics: {
@@ -415,7 +438,7 @@ interface ValidationResult {
   };
 }
 
-const formatMarks = (marks: number) => Number.isInteger(marks) ? `${marks}` : `${marks}`;
+const formatMarks = (marks: number) => (Number.isInteger(marks) ? `${marks}` : `${marks}`);
 
 const failedValidation = (totalMarks: number, code: string, message: string, detail: string): ValidationResult => ({
   errors: [{ type: 'error', code, message, detail }],
@@ -423,6 +446,7 @@ const failedValidation = (totalMarks: number, code: string, message: string, det
   sectionSummary: [],
   orStatus: {},
   grandTotal: totalMarks,
+  grandTime: 0,
   isValid: false,
   subUnitCoverage: [],
   analytics: { unitTargets: [], subUnitTargets: [], sectionTargets: [], datasetMeta: { unitCount: 0, subUnitCount: 0, questionCount: 0 } },
@@ -451,10 +475,11 @@ function getUnitQuestionCombinations(paperType: PaperType, targetMarks: number) 
   };
 
   if (targetUnits >= 0 && targetUnits <= 200) visit(0, targetUnits);
-  const describe = (combo: number[]) => combo
-    .map((count, index) => count ? `${count} × ${formatMarks(sections[index].marks)} = ${formatMarks(count * sections[index].marks)}` : '')
-    .filter(Boolean)
-    .join('  +  ') + `  =  ${formatMarks(targetMarks)}M`;
+  const describe = (combo: number[]) =>
+    combo
+      .map((count, index) => (count ? `${count} × ${formatMarks(sections[index].marks)} = ${formatMarks(count * sections[index].marks)}` : ''))
+      .filter(Boolean)
+      .join('  +  ') + `  =  ${formatMarks(targetMarks)}M`;
   return {
     sections,
     combos,
@@ -478,14 +503,12 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
   const examTermLower = (blueprint.examTerm || '').toLowerCase();
   const isATTerm = examTermLower.includes('at') || examTermLower.includes('third') || examTermLower.includes('மூன்று');
 
-  // deduplicated push
   const pushError = (err: ValidationError) => {
     if (!rawErrors.some(e => e.code === err.code && e.message === err.message)) {
       rawErrors.push(err);
     }
   };
 
-  // safe empty klSummary
   const emptyKlSummary = (): ValidationResult['klSummary'] =>
     Object.fromEntries(
       Object.values(KnowledgeLevel).map(kl => [kl, { marks: 0, target: 0 }])
@@ -494,20 +517,20 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
   if (!paperType?.sections) {
     return {
       errors: [{ type: 'error', code: 'PAPER_TYPE_MISSING', message: 'பேப்பர் டைப் கிடைக்கவில்லை.' }],
-      klSummary: emptyKlSummary(), sectionSummary: [], orStatus: {}, grandTotal: 0, isValid: false, subUnitCoverage: [],
+      klSummary: emptyKlSummary(), sectionSummary: [], orStatus: {}, grandTotal: 0, grandTime: 0, isValid: false, subUnitCoverage: [],
       analytics: { unitTargets: [], subUnitTargets: [], sectionTargets: [], datasetMeta: { unitCount: 0, subUnitCount: 0, questionCount: 0 } }
     };
   }
   if (!curriculum?.units) {
     return {
       errors: [{ type: 'error', code: 'CURRICULUM_MISSING', message: 'பாடத்திட்டம் கிடைக்கவில்லை.' }],
-      klSummary: emptyKlSummary(), sectionSummary: [], orStatus: {}, grandTotal: 0, isValid: false, subUnitCoverage: [],
+      klSummary: emptyKlSummary(), sectionSummary: [], orStatus: {}, grandTotal: 0, grandTime: 0, isValid: false, subUnitCoverage: [],
       analytics: { unitTargets: [], subUnitTargets: [], sectionTargets: [], datasetMeta: { unitCount: 0, subUnitCount: 0, questionCount: 0 } }
     };
   }
 
-  // ── 1. Grand total ──────────────────────────────────────────────────────────
   const grandTotal = items.reduce((acc, i) => acc + i.totalMarks, 0);
+  const grandTime = items.reduce((acc, i) => acc + (Number(i.time) || getDefaultQuestionTime(i.marksPerQuestion, i.questionCount)), 0);
   if (items.length === 0) {
     pushError({
       type: 'error',
@@ -524,7 +547,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     });
   }
 
-  // SR1 + SR2 together must account for exactly 10% of paper marks.
   const isShortResponseFormat = (format?: unknown) => {
     const value = String(format || '').toUpperCase();
     return /\bSR1\b|\bMCI\b|\bSR2\b|\bMI\b/.test(value);
@@ -545,7 +567,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     });
   }
 
-  // ── 2. Knowledge Level distribution ────────────────────────────────────────
   const klMarks: Record<KnowledgeLevel, number> = {
     [KnowledgeLevel.BASIC]: 0, [KnowledgeLevel.AVERAGE]: 0, [KnowledgeLevel.PROFOUND]: 0,
   };
@@ -553,7 +574,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
 
   let perfectKL = items.length > 0;
   const klSummary = emptyKlSummary();
-
   const KL_EXACT = computeExactKlTargets(blueprint.totalMarks);
 
   ([KnowledgeLevel.BASIC, KnowledgeLevel.AVERAGE, KnowledgeLevel.PROFOUND] as KnowledgeLevel[]).forEach(kl => {
@@ -589,7 +609,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     });
   }
 
-  // ── 3. Section fill validation ──────────────────────────────────────────────
   const sectionSummary: ValidationResult['sectionSummary'] = paperType.sections.map(s => {
     const filled = items.filter(i => i.sectionId === s.id).reduce((acc, i) => acc + i.questionCount, 0);
     if (items.length > 0 && filled !== s.count) {
@@ -610,9 +629,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     actualMarks: items.filter(i => i.sectionId === s.id).reduce((acc, i) => acc + i.totalMarks, 0),
   }));
 
-  // ── 4. Internal Choice (OR) validation ─────────────────────────────────────
-  // Rule: Each section with optionCount > 0 needs exactly 1 OR question.
-  // OR counts must use questionCount (not item count).
   const orStatus: ValidationResult['orStatus'] = {};
   paperType.sections.forEach(s => {
     if (s.optionCount > 0) {
@@ -648,10 +664,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     }
   });
 
-  // ── 5. OR Sub-unit & Unit spread validation ─────────────────────────────────
-  // Rule A (always)   : ஒரே sub-unit-ல் ஒரே section-இல் OR > 1 வரக்கூடாது
-  // Rule B (multi)    : OR spread follows configured unit weightage and term rules
-  // Rule C (single)   : ஒரே sub-unit-ல் OR > 1 வரக்கூடவே கூடாது
   const choiceItems = items.filter(i => i.hasInternalChoice);
   const totalUnitCount = curriculum.units.length;
 
@@ -674,7 +686,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     });
 
     if (totalUnitCount <= 1) {
-      // Single-subject: every OR must come from a DIFFERENT sub-unit
       const singleSubMap = new Map<string, number>();
       choiceItems.forEach(item => {
         const targetSubUnit = item.subUnitIdB || item.subUnitId;
@@ -719,16 +730,10 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     }
   }
 
-  // ── 5b. examTerm-based OR distribution ─────────────────────────────────────
-  // BT (1st term): single unit — OR must come from DIFFERENT sub-units
-  // AT (3rd term): 5-6 units — OR must spread across ≥3 units, max 1 OR per unit
   if (choiceItems.length > 0 && items.length > 0) {
-    const examTermLower = (blueprint.examTerm || '').toLowerCase();
-    const isATTerm = examTermLower.includes('at') || examTermLower.includes('third') || examTermLower.includes('மூன்று');
     const isBTTerm = examTermLower.includes('bt') || examTermLower.includes('first') || examTermLower.includes('முதல்');
 
     if (isATTerm && curriculum.units.length >= 3) {
-      // AT: max 1 OR per unit
       const atUnitOrMap = new Map<string, number>();
       choiceItems.forEach(item => {
         const targetUnit = item.unitIdB || item.unitId;
@@ -744,7 +749,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
           });
         }
       });
-      // AT: OR spread across ≥3 units
       const atUnitsWithOR = atUnitOrMap.size;
       if (atUnitsWithOR < 3) {
         pushError({
@@ -762,7 +766,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     }
 
     if (isBTTerm || curriculum.units.length === 1) {
-      // BT / Single-unit: every OR must come from a different sub-unit
       const btSubOrMap = new Map<string, number>();
       choiceItems.forEach(item => {
         const targetSubUnit = item.subUnitIdB || item.subUnitId;
@@ -780,7 +783,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
       });
     }
   }
-
 
   const subUnitCoverage: ValidationResult['subUnitCoverage'] = [];
   const unitTargets: ValidationResult['analytics']['unitTargets'] = [];
@@ -807,14 +809,18 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
       .reduce((acc, i) => acc + i.totalMarks, 0);
     const unitDeviation = unitMarks - idealUnitMarks;
     const unitComboRules = getUnitQuestionCombinations(paperType, idealUnitMarks);
-    const actualSectionCounts = unitComboRules.sections.map(section => items
-      .filter(item => item.unitId === unit.id && item.sectionId === section.id)
-      .reduce((count, item) => count + item.questionCount, 0));
-    const hasAllowedDistribution = actualSectionCounts.every((count, index) => count <= unitComboRules.sections[index].count)
-      && Math.abs(actualSectionCounts.reduce((marks, count, index) => marks + count * unitComboRules.sections[index].marks, 0) - idealUnitMarks) < 1e-9;
-    const actualDistribution = actualSectionCounts.map((count, index) => count
-      ? `${count} × ${formatMarks(unitComboRules.sections[index].marks)} = ${formatMarks(count * unitComboRules.sections[index].marks)}`
-      : '').filter(Boolean).join('  +  ');
+    const actualSectionCounts = unitComboRules.sections.map(section =>
+      items
+        .filter(item => item.unitId === unit.id && item.sectionId === section.id)
+        .reduce((count, item) => count + item.questionCount, 0)
+    );
+    const hasAllowedDistribution =
+      actualSectionCounts.every((count, index) => count <= unitComboRules.sections[index].count) &&
+      Math.abs(actualSectionCounts.reduce((marks, count, index) => marks + count * unitComboRules.sections[index].marks, 0) - idealUnitMarks) < 1e-9;
+    const actualDistribution = actualSectionCounts
+      .map((count, index) => (count ? `${count} × ${formatMarks(unitComboRules.sections[index].marks)} = ${formatMarks(count * unitComboRules.sections[index].marks)}` : ''))
+      .filter(Boolean)
+      .join('  +  ');
     unitTargets.push({
       unitId: unit.id,
       unitName: unit.name,
@@ -864,8 +870,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
       if (suMarks === 0 && items.length > 0) {
         uncoveredSubUnits++;
         pushError({
-          // In AT, some curriculum parts intentionally have no questions.
-          // Keep this as informational context instead of presenting it as a validation issue.
           type: isATTerm ? 'info' : 'warning', code: `SUBUNIT_EMPTY_${su.id}`,
           message: `"${su.name}" — வினாக்கள் ஒதுக்கப்படவில்லை`,
           detail: 'இந்த பாடப்பகுதியிலிருந்து குறைந்தது ஒரு வினா சேர்க்கவும்.'
@@ -889,16 +893,11 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     });
   }
 
-  // Unit concentration is validated against the configured examTerm weightage above.
-  // A 50% generic cap is invalid here: a term may intentionally assign >50% to one unit.
-
-  // ── 8. Sub-unit mark balance check ────────────────────────────────────────
   if (items.length > 0) {
     const allSubMarks = subUnitCoverage.filter(s => s.marks > 0).map(s => s.marks);
     if (allSubMarks.length > 1) {
       const maxM = Math.max(...allSubMarks);
       const minM = Math.min(...allSubMarks);
-      // Allow ±marks-of-one-section difference as reasonable imbalance
       const sectionMarkValues = paperType.sections.map(s => s.marks);
       const maxAllowedDiff = Math.max(...sectionMarkValues, 2);
       if ((maxM - minM) > maxAllowedDiff * 2) {
@@ -911,7 +910,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     }
   }
 
-  // ── 9. itemFormat for OR B side missing ────────────────────────────────────
   if (items.length > 0) {
     choiceItems.forEach(item => {
       if (!item.itemFormatB) {
@@ -924,7 +922,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     });
   }
 
-  // ── 11. KL total sanity ────────────────────────────────────────────────────
   if (items.length > 0) {
     const klSum = Object.values(klMarks).reduce((a, b) => a + b, 0);
     if (klSum !== blueprint.totalMarks) {
@@ -936,7 +933,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     }
   }
 
-  // ── 12. Cognitive Process diversity ───────────────────────────────────────
   if (items.length > 4) {
     const allowedCPs = getAllowedCPs(blueprint.subject);
     const cpCounts = new Map<string, number>();
@@ -958,7 +954,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     }
   }
 
-  // ── 13. Higher-order thinking (Profound ≥ 15%) ────────────────────────────
   if (items.length > 0) {
     const profoundPct = blueprint.totalMarks > 0
       ? Math.round((klMarks[KnowledgeLevel.PROFOUND] / blueprint.totalMarks) * 100) : 0;
@@ -971,7 +966,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     }
   }
 
-  // ── 14. Section mark concentration (no section > 50% of total) ────────────
   if (items.length > 0) {
     paperType.sections.forEach(s => {
       const sMarks = items.filter(i => i.sectionId === s.id).reduce((acc, i) => acc + i.totalMarks, 0);
@@ -986,7 +980,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     });
   }
 
-  // ── 15. Blueprint completeness score ──────────────────────────────────────
   if (items.length > 0) {
     const finalErrors = rawErrors.filter(e => e.type === 'error').length;
     const finalWarnings = rawErrors.filter(e => e.type === 'warning').length;
@@ -1012,6 +1005,7 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     sectionSummary,
     orStatus,
     grandTotal,
+    grandTime,
     isValid: rawErrors.filter(e => e.type === 'error').length === 0,
     subUnitCoverage,
     analytics: {
@@ -1028,13 +1022,7 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
 }
 
 // ─── Auto-fill Engine ────────────────────────────────────────────────────────
-/**
- * Produces corrected items array:
- * 1. KL targets satisfied (Basic 30%, Average 50%, Profound 20%)
- * 2. Cognitive process values are retained for all subjects
- * 3. OR: exactly s.optionCount per section, spread across different sub-units
- * 4. No OR in same sub-unit twice
- */
+
 export function autoFillBlueprint(
   items: BlueprintItem[],
   paperType: PaperType,
@@ -1046,12 +1034,8 @@ export function autoFillBlueprint(
   if (!items.length || !paperType || !curriculum) return items;
 
   let result = items.map(item => ({ ...item }));
-  const allowedCPs = getAllowedCPs(subject ?? curriculum.subject ?? '');
-
-  // Step 1: Fix KL distribution exactly wherever possible
   result = assignKnowledgeLevelsExactly(result, totalMarks);
 
-  // Step 2: Fix OR — clear all existing, then assign correctly
   result.forEach(item => {
     item.hasInternalChoice = false;
     item.unitIdB = undefined;
@@ -1064,7 +1048,7 @@ export function autoFillBlueprint(
   const examTermLower = (examTerm || '').toLowerCase();
   const isATTerm = examTermLower.includes('at') || examTermLower.includes('third') || examTermLower.includes('மூன்று');
   const usedSubUnits = new Set<string>();
-  const usedUnits = new Set<string>(); // for AT: max 1 OR per unit
+  const usedUnits = new Set<string>();
   const db = getDB();
   const orWeightages = db && examTerm
     ? getTermConfiguration(db, examTerm as any, curriculum.subject, curriculum.classLevel)
@@ -1077,11 +1061,11 @@ export function autoFillBlueprint(
   paperType.sections.forEach(section => {
     if (section.optionCount <= 0) return;
 
-    const sectionItems = result.filter(i => i.sectionId === section.id)
+    const sectionItems = result
+      .filter(i => i.sectionId === section.id)
       .sort((a, b) => (weightByUnit.get(a.unitId) ?? 1) - (weightByUnit.get(b.unitId) ?? 1));
     let assigned = 0;
 
-    // Pick items from different sub-units (and different units for AT)
     for (const item of sectionItems) {
       if (assigned >= section.optionCount) break;
       const unitAlreadyUsed = isATTerm && usedUnits.has(item.unitId);
@@ -1100,7 +1084,6 @@ export function autoFillBlueprint(
       }
     }
 
-    // If couldn't find unique sub-units, allow same sub-unit (fallback)
     if (assigned < section.optionCount) {
       for (const item of sectionItems) {
         if (assigned >= section.optionCount) break;
@@ -1121,18 +1104,8 @@ export function autoFillBlueprint(
   return result.map(item => ({ ...item, ...sanitizeBlueprintItem(item) }));
 }
 
-// ─── KL Badge ────────────────────────────────────────────────────────────────
-interface KLBadgeProps { level: KnowledgeLevel; short?: boolean }
-const KLBadge: React.FC<KLBadgeProps> = ({ level, short }) => {
-  const c = KL_COLORS[level];
-  return (
-    <span className={`text-[9px] uppercase font-bold px-1 rounded ${c.badge}`}>
-      {short ? level[0] : level}
-    </span>
-  );
-};
-
 // ─── Validation Panel ────────────────────────────────────────────────────────
+
 interface ValidationPanelProps {
   result: ValidationResult;
   paperType: PaperType;
@@ -1140,7 +1113,7 @@ interface ValidationPanelProps {
   onHighlightSubUnit?: (subUnitId: string) => void;
 }
 
-const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, onAutoFill, onHighlightSubUnit }) => {
+const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, onAutoFill, onHighlightSubUnit }) => {
   const [checked, setChecked] = useState(false);
 
   const orIssues = result.errors.filter(e => isOrDistributionError(e) && e.type !== 'info');
@@ -1148,8 +1121,6 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
   const warnings = result.errors.filter(e => e.type === 'warning' && !isOrDistributionError(e));
   const infos = result.errors.filter(e => e.type === 'info');
   const errorCount = result.errors.filter(e => e.type === 'error').length;
-
-  const handleCheck = () => setChecked(true);
 
   const handleWarningClick = (warning: ValidationError) => {
     if (!warning.code?.startsWith('SUBUNIT_EMPTY_')) return;
@@ -1159,7 +1130,6 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden text-sm bg-white h-full flex flex-col">
-      {/* Header */}
       <div className="bg-gray-50 border-b border-gray-200 px-3 py-2 flex items-center justify-between">
         <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">Validation</span>
         {checked && (
@@ -1170,8 +1140,6 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-
-        {/* KL Progress bars — always visible */}
         {([KnowledgeLevel.BASIC, KnowledgeLevel.AVERAGE, KnowledgeLevel.PROFOUND] as KnowledgeLevel[]).map(kl => {
           const { marks, target } = result.klSummary[kl] || { marks: 0, target: 0 };
           const pct = Math.min(100, (marks / Math.max(target, 1)) * 100);
@@ -1200,16 +1168,21 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
 
         <hr className="border-gray-100" />
 
-        {/* OR Status chips */}
         {Object.keys(result.orStatus).length > 0 && (
           <div>
             <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">OR நிலை</div>
             <div className="flex flex-wrap gap-1.5">
               {(Object.entries(result.orStatus) as [string, { filled: number; required: number; label: string }][]).map(([sId, info]) => (
-                <span key={sId}
-                  className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${info.filled === info.required ? 'bg-green-50 text-green-700 border-green-300'
-                    : info.filled > info.required ? 'bg-red-50 text-red-700 border-red-300'
-                      : 'bg-orange-50 text-orange-700 border-orange-300'}`}>
+                <span
+                  key={sId}
+                  className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${
+                    info.filled === info.required
+                      ? 'bg-green-50 text-green-700 border-green-300'
+                      : info.filled > info.required
+                        ? 'bg-red-50 text-red-700 border-red-300'
+                        : 'bg-orange-50 text-orange-700 border-orange-300'
+                  }`}
+                >
                   {info.label}: {info.filled}/{info.required}
                 </span>
               ))}
@@ -1217,20 +1190,17 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
           </div>
         )}
 
-        {/* Check button */}
         {!checked && (
           <button
-            onClick={handleCheck}
+            onClick={() => setChecked(true)}
             className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm"
           >
             <ClipboardCheck size={14} /> Blueprint சரிபார்க்கவும்
           </button>
         )}
 
-        {/* Results — shown only after check */}
         {checked && (
           <div className="space-y-2">
-            {/* Re-check button */}
             <button
               onClick={() => setChecked(false)}
               className="w-full py-1.5 border border-gray-200 text-gray-500 text-[10px] font-semibold rounded-lg hover:bg-gray-50 transition-colors"
@@ -1245,7 +1215,6 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
               </div>
             ) : (
               <>
-                {/* Errors */}
                 {errors.length > 0 && (
                   <div className="space-y-1">
                     <div className="text-[10px] font-black text-red-600 uppercase tracking-wider flex items-center gap-1">
@@ -1257,14 +1226,12 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
                         <div>
                           <div className="text-xs font-bold text-red-700">{e.message}</div>
                           {e.detail && <div className="text-[10px] text-red-500 mt-0.5">{e.detail}</div>}
-                          
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* Warnings */}
                 {orIssues.length > 0 && (
                   <div className="space-y-1">
                     <div className="text-[10px] font-black text-purple-700 uppercase tracking-wider flex items-center gap-1">
@@ -1276,12 +1243,12 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
                         <div>
                           <div className={`text-xs font-bold ${e.type === 'error' ? 'text-red-700' : 'text-purple-700'}`}>{e.message}</div>
                           {e.detail && <div className="text-[10px] text-slate-600 mt-0.5">{e.detail}</div>}
-                          
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
+
                 {warnings.length > 0 && (
                   <div className="space-y-1">
                     <div className="text-[10px] font-black text-orange-600 uppercase tracking-wider flex items-center gap-1">
@@ -1307,7 +1274,6 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
                   </div>
                 )}
 
-                {/* Info / Good items */}
                 {infos.length > 0 && (
                   <div className="space-y-1">
                     <div className="text-[10px] font-black text-green-600 uppercase tracking-wider flex items-center gap-1">
@@ -1327,7 +1293,6 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
               </>
             )}
 
-            {/* Auto-fill button */}
             <button
               onClick={() => onAutoFill?.()}
               disabled={!onAutoFill}
@@ -1338,7 +1303,6 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
           </div>
         )}
 
-        {/* Rules Quick-Ref */}
         <hr className="border-gray-100" />
         <div>
           <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">விதிகள்</div>
@@ -1373,12 +1337,14 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
   );
 };
 
+// ─── Analytics Panel ─────────────────────────────────────────────────────────
+
 interface AnalyticsPanelProps {
   result: ValidationResult;
 }
 
 const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ result }) => {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const topUnitDrift = [...result.analytics.unitTargets]
     .sort((a, b) => Math.abs(b.deviation) - Math.abs(a.deviation))
     .slice(0, 4);
@@ -1389,7 +1355,7 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ result }) => {
     <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
       <button
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 text-slate-800 font-bold text-sm"
+        className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 text-slate-800 font-bold text-xs sm:text-sm"
       >
         <span className="flex items-center gap-2"><Sparkles size={14} /> Blueprint Analysis Dataset</span>
         {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -1411,20 +1377,43 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ result }) => {
             </div>
           </div>
 
-          <div>
+          <div className="overflow-x-auto">
             <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Weightage Validation</div>
             <table className="w-full text-[10px] border-collapse">
-              <thead><tr className="text-left text-slate-500"><th>Unit</th><th>Weightage</th><th>Target</th><th>Actual</th><th className="text-center">Combos</th><th>Deviation</th><th>Status</th></tr></thead>
-              <tbody>{result.analytics.unitTargets.map(unit => (
-                <tr key={unit.unitId} className="border-t border-slate-100">
-                  <td className="py-1 font-semibold">{unit.unitName}</td><td>{unit.pct}%</td><td>{unit.ideal}M</td><td>{unit.actual}M</td>
-                  <td className="text-center"><button type="button" title="மதிப்பெண் combo-களை காண்க" aria-label={unit.unitName + ' மதிப்பெண் combo-களை காண்க'} onClick={() => void showUnitComboInfo(unit.unitName, unit.ideal, unit.allowedCombinations)} className="inline-flex items-center justify-center rounded-full p-1.5 text-indigo-600 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-300"><Info size={15} /></button></td>
-                  <td className={unit.deviation === 0 ? 'text-green-600' : 'text-red-600'}>{unit.deviation > 0 ? '+' : ''}{unit.deviation}M</td>
-                  <td className={'font-black ' + (unit.deviation === 0 ? 'text-green-600' : 'text-red-600')}>{unit.deviation === 0 ? 'PASS' : 'ERROR'}</td>
+              <thead>
+                <tr className="text-left text-slate-500">
+                  <th>Unit</th><th>Weightage</th><th>Target</th><th>Actual</th><th className="text-center">Combos</th><th>Deviation</th><th>Status</th>
                 </tr>
-              ))}</tbody>
+              </thead>
+              <tbody>
+                {result.analytics.unitTargets.map(unit => (
+                  <tr key={unit.unitId} className="border-t border-slate-100">
+                    <td className="py-1 font-semibold">{unit.unitName}</td>
+                    <td>{unit.pct}%</td>
+                    <td>{unit.ideal}M</td>
+                    <td>{unit.actual}M</td>
+                    <td className="text-center">
+                      <button
+                        type="button"
+                        title="மதிப்பெண் combo-களை காண்க"
+                        aria-label={unit.unitName + ' மதிப்பெண் combo-களை காண்க'}
+                        onClick={() => void showUnitComboInfo(unit.unitName, unit.ideal, unit.allowedCombinations)}
+                        className="inline-flex items-center justify-center rounded-full p-1.5 text-indigo-600 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      >
+                        <Info size={15} />
+                      </button>
+                    </td>
+                    <td className={unit.deviation === 0 ? 'text-green-600' : 'text-red-600'}>
+                      {unit.deviation > 0 ? '+' : ''}{unit.deviation}M
+                    </td>
+                    <td className={'font-black ' + (unit.deviation === 0 ? 'text-green-600' : 'text-red-600')}>
+                      {unit.deviation === 0 ? 'PASS' : 'ERROR'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 mt-2">
               {topUnitDrift.map(unit => (
                 <div key={unit.unitId} className="rounded-lg border border-slate-100 px-2 py-1.5">
                   <div className="flex justify-between gap-2">
@@ -1478,62 +1467,99 @@ interface ItemCardProps {
   onEdit: () => void;
   onClose: () => void;
   onToggleActive: () => void;
-  onUpdate: (id: string, field: keyof BlueprintItem, value: unknown) => void;
+  onUpdate: (id: string, field: keyof BlueprintItem | Partial<BlueprintItem>, value?: unknown) => void;
+  onMoveItem?: (itemId: string, unitId: string, sectionId: string, subUnitId: string) => void;
   onRemove?: (id: string) => void;
   onDragStart: (e: React.DragEvent, item: BlueprintItem, isOptionB?: boolean) => void;
   onDragEnd: () => void;
   discourses: Discourse[];
-  onTouchPointerDown: (e: React.PointerEvent, item: BlueprintItem, isOptionB?: boolean) => void;
+  onTouchPointerDown: (e: React.PointerEvent, item: BlueprintItem, isOptionB?: boolean, immediate?: boolean) => void;
+  onTouchPointerUp: (e: React.PointerEvent, item: BlueprintItem, isOptionB?: boolean, onDoubleTap?: () => void) => void;
   mobileGestures?: boolean;
   qNumber?: string;
 }
 
 const ItemCard: React.FC<ItemCardProps> = ({
-  item, curriculum, readOnly, isEditing, isActive, isDragging, renderAsOptionB = false, onEdit, onClose, onToggleActive, onUpdate, onRemove, onDragStart, onDragEnd, qNumber, discourses, onTouchPointerDown, mobileGestures = false
+  item,
+  curriculum,
+  readOnly,
+  isEditing,
+  isActive,
+  isDragging,
+  renderAsOptionB = false,
+  onEdit,
+  onClose,
+  onToggleActive,
+  onUpdate,
+  onMoveItem,
+  onRemove,
+  onDragStart,
+  onDragEnd,
+  qNumber,
+  discourses,
+  onTouchPointerDown,
+  onTouchPointerUp,
 }) => {
   const activeLevel = renderAsOptionB ? (item.knowledgeLevelB || item.knowledgeLevel) : item.knowledgeLevel;
   const activeCP = renderAsOptionB ? (item.cognitiveProcessB || item.cognitiveProcess) : item.cognitiveProcess;
   const activeFormat = renderAsOptionB ? (item.itemFormatB || item.itemFormat) : item.itemFormat;
+  const itemTime = Number(item.time) || getDefaultQuestionTime(item.marksPerQuestion, item.questionCount);
   const markColor = MARK_COLORS[item.marksPerQuestion] || 'bg-gray-100 border-gray-400 text-gray-900';
   const cardRef = React.useRef<HTMLDivElement>(null);
-  const lastTouchTapRef = React.useRef<number>(0);
-  const [popStyle, setPopStyle] = React.useState<React.CSSProperties>({ top: '100%', left: 0 });
-
-  React.useEffect(() => {
-    if (!isEditing || !cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const popW = 480; // edit-drawer width
-    const popH = 420; // estimated height
-
-    const style: React.CSSProperties = {};
-    // Vertical placement
-    if (rect.bottom + popH > vh && rect.top > popH) {
-      style.bottom = '100%';
-      style.top = 'auto';
-      style.marginBottom = '4px';
-    } else {
-      style.top = '100%';
-      style.bottom = 'auto';
-      style.marginTop = '4px';
-    }
-    // Horizontal placement
-    if (rect.left + popW > vw) {
-      style.right = 0;
-      style.left = 'auto';
-    } else {
-      style.left = 0;
-      style.right = 'auto';
-    }
-    setPopStyle(style);
-  }, [isEditing]);
 
   const allowedCPs = isLanguageSubject(curriculum.subject) ? getAllowedCPs() : Object.values(CognitiveProcess);
-  const optionSubUnits = curriculum.units.find(u => u.id === item.unitId)?.subUnits || [];
+  const currentUnit = curriculum.units.find(u => u.id === item.unitId) || curriculum.units[0];
+  const optionSubUnits = currentUnit?.subUnits || [];
+  const optionBUnit = curriculum.units.find(u => u.id === (item.unitIdB || item.unitId)) || currentUnit;
+  const optionBSubUnits = optionBUnit?.subUnits || [];
+
+  // Lock background page scrolling while Edit Modal is open
+  useEffect(() => {
+    if (!isEditing) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isEditing]);
+
+  const matchingDiscourses = useMemo(() => {
+    const targetMark = Number(item.marksPerQuestion);
+    const exactMatch = discourses.filter(d => {
+      if (d.marks !== undefined && d.marks !== null && String(d.marks).trim() !== '') {
+        return Number(d.marks) === targetMark;
+      }
+      return true;
+    });
+    return exactMatch.length > 0 ? exactMatch : discourses;
+  }, [discourses, item.marksPerQuestion]);
 
   const isSameSubUnit = !item.subUnitIdB || item.subUnitId === item.subUnitIdB;
   const showInlineOr = item.hasInternalChoice && !renderAsOptionB && isSameSubUnit;
+
+  const handleUnitChangeInModal = (newUnitId: string) => {
+    const targetUnit = curriculum.units.find(u => u.id === newUnitId);
+    const firstSubUnitId = targetUnit?.subUnits?.[0]?.id || '';
+    if (!firstSubUnitId) return;
+
+    if (onMoveItem) {
+      onMoveItem(item.id, newUnitId, item.sectionId, firstSubUnitId);
+    } else {
+      onUpdate(item.id, { unitId: newUnitId, subUnitId: firstSubUnitId });
+    }
+    if (item.hasInternalChoice) {
+      const altSubUnit = targetUnit?.subUnits?.[1]?.id || firstSubUnitId;
+      onUpdate(item.id, { unitIdB: newUnitId, subUnitIdB: altSubUnit });
+    }
+  };
+
+  const handleSubUnitChangeInModal = (newSubUnitId: string) => {
+    if (onMoveItem) {
+      onMoveItem(item.id, item.unitId, item.sectionId, newSubUnitId);
+    } else {
+      onUpdate(item.id, 'subUnitId', newSubUnitId);
+    }
+  };
 
   const handleFormatChange = (field: 'itemFormat' | 'itemFormatB', val: ItemFormat) => {
     const marks = item.marksPerQuestion;
@@ -1552,10 +1578,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
           icon: 'error',
           confirmButtonColor: '#4f46e5',
           confirmButtonText: 'சரி',
-          customClass: {
-            title: 'swal-tau-urai-title',
-            htmlContainer: 'swal-tau-paalai-content'
-          }
+          customClass: { title: 'swal-tau-urai-title', htmlContainer: 'swal-tau-paalai-content' }
         });
         return;
       }
@@ -1567,10 +1590,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
           icon: 'error',
           confirmButtonColor: '#4f46e5',
           confirmButtonText: 'சரி',
-          customClass: {
-            title: 'swal-tau-urai-title',
-            htmlContainer: 'swal-tau-paalai-content'
-          }
+          customClass: { title: 'swal-tau-urai-title', htmlContainer: 'swal-tau-paalai-content' }
         });
         return;
       } else {
@@ -1583,10 +1603,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
           cancelButtonColor: '#64748b',
           confirmButtonText: 'ஆம், அமை',
           cancelButtonText: 'ரத்து செய்',
-          customClass: {
-            title: 'swal-tau-urai-title',
-            htmlContainer: 'swal-tau-paalai-content'
-          }
+          customClass: { title: 'swal-tau-urai-title', htmlContainer: 'swal-tau-paalai-content' }
         }).then((result) => {
           if (result.isConfirmed) {
             onUpdate(item.id, field, val);
@@ -1602,10 +1619,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
           icon: 'warning',
           confirmButtonColor: '#4f46e5',
           confirmButtonText: 'சரி',
-          customClass: {
-            title: 'swal-tau-urai-title',
-            htmlContainer: 'swal-tau-paalai-content'
-          }
+          customClass: { title: 'swal-tau-urai-title', htmlContainer: 'swal-tau-paalai-content' }
         });
         return;
       }
@@ -1615,60 +1629,111 @@ const ItemCard: React.FC<ItemCardProps> = ({
   };
 
   return (
-    <div className="space-y-1" ref={cardRef}>
-      {/* Main card */}
+    <div className="space-y-1 min-w-0" ref={cardRef}>
+      {/* Main Card */}
       <div
         id={renderAsOptionB ? `item-b-${item.id}` : `item-${item.id}`}
         draggable={!readOnly}
         onDragStart={e => onDragStart(e, item, renderAsOptionB)}
         onDragEnd={onDragEnd}
-        onPointerDown={e => onTouchPointerDown(e, item, renderAsOptionB)}
-        onPointerUp={e => {
-          if (!mobileGestures || e.pointerType !== 'touch') return;
-          const now = Date.now();
-          if (lastTouchTapRef.current && now - lastTouchTapRef.current < 340) {
-            lastTouchTapRef.current = 0;
-            onToggleActive();
-            if (!readOnly) onEdit();
-          } else { lastTouchTapRef.current = now; }
+        onPointerDown={e => onTouchPointerDown(e, item, renderAsOptionB, false)}
+        onPointerUp={e => onTouchPointerUp(e, item, renderAsOptionB, () => {
+          onToggleActive();
+          if (!readOnly) onEdit();
+        })}
+        onContextMenu={e => {
+          if (!readOnly) e.preventDefault();
         }}
-        onClick={() => { onToggleActive(); if (!mobileGestures && window.matchMedia('(min-width: 640px)').matches && !readOnly) onEdit(); }}
-        onDoubleClick={() => { if (!mobileGestures) { onToggleActive(); !readOnly && onEdit(); } }}
-        className={`sm:pb-2 pb-0.5 sm:p-1.5 p-1 rounded-md text-xs border shadow-sm w-full relative transition-all overflow-hidden group/item ${markColor} ${!readOnly ? 'hover:shadow-md cursor-pointer active:scale-95' : 'cursor-default'} ${isActive ? 'ring-2 ring-fuchsia-400 animate-pulse' : ''} ${isDragging ? 'opacity-50' : ''}`}
+        onClick={() => onToggleActive()}
+        onDoubleClick={() => {
+          onToggleActive();
+          if (!readOnly) onEdit();
+        }}
+        style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none' }}
+        className={`pb-1.5 pt-1 px-1 lg:p-1.5 rounded-md border shadow-xs w-full min-w-0 relative transition-all overflow-hidden select-none group/item ${markColor} ${
+          !readOnly ? 'hover:shadow-md cursor-pointer active:scale-[0.98]' : 'cursor-default'
+        } ${isActive ? 'ring-2 ring-indigo-500 shadow-sm' : ''} ${isDragging ? 'opacity-35 ring-2 ring-indigo-500 scale-95' : ''}`}
       >
         <div className={`absolute bottom-0 left-0 w-full h-1 ${KL_BOTTOM_COLORS[activeLevel]} opacity-90`} />
-        
-        <div className="font-bold flex justify-between items-center px-0.5 w-full">
-          <div className="flex items-center gap-1 min-w-0" onClick={e => e.stopPropagation()}>
+
+        {/* Top Row: Drag Handle + Q# + Badges + Edit Button */}
+        <div className="font-bold flex justify-between items-center gap-0.5 w-full min-w-0">
+          <div className="flex items-center gap-0.5 min-w-0 flex-1">
+            {!readOnly && (
+              <span
+                onPointerDown={e => {
+                  e.stopPropagation();
+                  onTouchPointerDown(e, item, renderAsOptionB, true);
+                }}
+                style={{ touchAction: 'none' }}
+                className="shrink-0 text-slate-400 hover:text-indigo-600 cursor-grab active:cursor-grabbing -ml-0.5 pr-0.5 py-0.5"
+                title="இழுத்து நகர்த்தவும் (Drag)"
+              >
+                <GripVertical size={11} />
+              </span>
+            )}
             {!readOnly && !renderAsOptionB ? (
-              <input 
-                type="text" 
-                value={item.qNo !== undefined ? item.qNo : (qNumber || (item.questionCount + "Q"))} 
-                onChange={(e) => onUpdate?.(item.id, 'qNo', e.target.value)}
-                className="w-10 sm:w-14 bg-white/50 border border-transparent hover:border-gray-300 focus:bg-white focus:outline-none focus:border-blue-500 text-[10px] sm:text-xs font-bold truncate rounded px-0.5"
-                title="Edit Question Number"
-              />
+              <>
+                <span className="lg:hidden truncate text-[9px] font-extrabold leading-none">
+                  {item.qNo || qNumber || `${item.questionCount}Q`}
+                </span>
+                <input
+                  type="text"
+                  value={item.qNo !== undefined ? item.qNo : (qNumber || `${item.questionCount}Q`)}
+                  onClick={e => e.stopPropagation()}
+                  onDoubleClick={e => e.stopPropagation()}
+                  onChange={(e) => onUpdate?.(item.id, 'qNo', e.target.value)}
+                  className="hidden lg:inline-block w-12 bg-white/50 border border-transparent hover:border-gray-300 focus:bg-white focus:outline-none focus:border-blue-500 text-[11px] font-bold truncate rounded px-0.5"
+                  title="Edit Question Number"
+                />
+              </>
             ) : (
-              <span className="truncate sm:text-xs text-[9px]">{item.qNo || qNumber || (item.questionCount + "Q")}</span>
+              <span className="truncate text-[9px] lg:text-[11px] font-extrabold leading-none">
+                {item.qNo || qNumber || `${item.questionCount}Q`}
+              </span>
             )}
             {item.hasInternalChoice && !renderAsOptionB && (
-              <span className="bg-purple-600 text-white px-0.5 py-0.1 rounded text-[7px] font-bold shrink-0">அ</span>
+              <span className="bg-purple-600 text-white px-0.5 rounded text-[7px] font-bold shrink-0 leading-tight">அ</span>
             )}
             {renderAsOptionB && (
-              <span className="bg-fuchsia-600 text-white px-0.5 py-0.1 rounded text-[7px] font-bold shrink-0">ஆ</span>
+              <span className="bg-fuchsia-600 text-white px-0.5 rounded text-[7px] font-bold shrink-0 leading-tight">ஆ</span>
             )}
           </div>
-          <span className="sm:text-[10px] text-[8px] opacity-70 shrink-0">({formatMatrixMark(item.totalMarks)}M)</span>
+
+          <div className="flex items-center gap-0.5 shrink-0">
+            <span className="text-[8px] lg:text-[9px] opacity-80 font-bold leading-none">
+              {formatMatrixMark(item.totalMarks)}M
+            </span>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+                className={`p-0.5 rounded bg-white/80 hover:bg-indigo-600 hover:text-white text-indigo-700 transition-all ${
+                  isActive ? 'opacity-100' : 'opacity-70 lg:opacity-0 lg:group-hover/item:opacity-100'
+                }`}
+                title="திருத்து (Edit)"
+              >
+                <Pencil size={9} />
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex justify-between items-center mt-0.5 gap-1">
-          <span className="font-semibold sm:text-[9px] text-[7px] opacity-80">{activeLevel.substring(0, 3).toUpperCase()}</span>
-          <span className="sm:text-[8px] text-[6px] opacity-70 font-semibold">{activeCP.split(' ')[0]}</span>
-          <span className="sm:text-[8px] text-[6px] opacity-80 font-bold">{activeFormat}</span>
+
+        {/* Bottom Row: Compact KL / CP / Format */}
+        <div className="flex justify-between items-center mt-0.5 gap-0.5 text-[7px] lg:text-[8px] leading-none min-w-0">
+          <span className="font-bold opacity-80 truncate">{activeLevel.substring(0, 3).toUpperCase()}</span>
+          <span className="opacity-70 font-semibold truncate">{activeCP.split(' ')[0]}</span>
+          <span className="opacity-85 font-bold truncate">{String(activeFormat).split(' ')[0]}</span>
         </div>
+
         {!readOnly && !renderAsOptionB && (
           <button
+            type="button"
             onClick={e => { e.stopPropagation(); onRemove?.(item.id); }}
-            className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 hover:bg-red-600 transition-opacity text-[9px] font-bold z-10 group-hover/item:opacity-100"
+            className="hidden lg:flex absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white items-center justify-center opacity-0 hover:bg-red-600 transition-opacity text-[9px] font-bold z-10 group-hover/item:opacity-100"
             title="Remove"
           >
             ×
@@ -1676,36 +1741,66 @@ const ItemCard: React.FC<ItemCardProps> = ({
         )}
       </div>
 
-      {/* OR (Option B) card */}
+      {/* Inline OR (Option B) card */}
       {showInlineOr && (
         <div
           id={`item-b-${item.id}`}
           draggable={!readOnly}
           onDragStart={e => { e.stopPropagation(); onDragStart(e, item, true); }}
           onDragEnd={onDragEnd}
-          className={`sm:pb-2 pb-0.5 sm:p-1.5 p-1 rounded-md text-xs text-center border shadow-sm w-full relative transition-all border-dashed bg-fuchsia-50 border-fuchsia-400 overflow-hidden group/or ${!readOnly ? 'cursor-pointer hover:shadow-md active:scale-95' : 'cursor-default'}`}
-          onPointerDown={e => onTouchPointerDown(e, item, true)}
+          style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none' }}
+          className={`pb-1.5 pt-1 px-1 lg:p-1.5 rounded-md border shadow-xs w-full min-w-0 relative transition-all border-dashed bg-fuchsia-50 border-fuchsia-400 overflow-hidden select-none group/or ${
+            !readOnly ? 'cursor-pointer hover:shadow-md active:scale-[0.98]' : 'cursor-default'
+          }`}
+          onPointerDown={e => onTouchPointerDown(e, item, true, false)}
+          onPointerUp={e => onTouchPointerUp(e, item, true, () => {
+            onToggleActive();
+            if (!readOnly) onEdit();
+          })}
+          onContextMenu={e => {
+            if (!readOnly) e.preventDefault();
+          }}
           onClick={() => onToggleActive()}
           onDoubleClick={() => { onToggleActive(); !readOnly && onEdit(); }}
         >
           <div className={`absolute bottom-0 left-0 w-full h-1 ${KL_BOTTOM_COLORS[item.knowledgeLevelB || item.knowledgeLevel]} opacity-90`} />
 
-          <div className="font-bold flex justify-between items-center px-0.5 text-fuchsia-800 w-full">
-            <div className="flex items-center gap-1 min-w-0">
-              <span className="truncate sm:text-xs text-[9px]">{qNumber || (item.questionCount + "Q")}</span>
-              <span className="bg-fuchsia-600 text-white px-0.5 py-0.1 rounded text-[7px] font-bold shrink-0">ஆ</span>
+          <div className="font-bold flex justify-between items-center gap-0.5 text-fuchsia-900 w-full min-w-0">
+            <div className="flex items-center gap-0.5 min-w-0 flex-1">
+              {!readOnly && (
+                <span
+                  onPointerDown={e => {
+                    e.stopPropagation();
+                    onTouchPointerDown(e, item, true, true);
+                  }}
+                  style={{ touchAction: 'none' }}
+                  className="shrink-0 text-fuchsia-400 hover:text-fuchsia-700 cursor-grab active:cursor-grabbing -ml-0.5 pr-0.5 py-0.5"
+                  title="ஆ வினாவை இழுத்து நகர்த்தவும்"
+                >
+                  <GripVertical size={11} />
+                </span>
+              )}
+              <span className="truncate text-[9px] lg:text-[11px] font-extrabold leading-none">
+                {item.qNo || qNumber || `${item.questionCount}Q`}
+              </span>
+              <span className="bg-fuchsia-600 text-white px-0.5 rounded text-[7px] font-bold shrink-0 leading-tight">ஆ</span>
             </div>
-            <span className="sm:text-[10px] text-[8px] opacity-70 shrink-0">({formatMatrixMark(item.totalMarks)}M)</span>
+            <span className="text-[8px] lg:text-[9px] opacity-80 shrink-0 font-bold leading-none">
+              {formatMatrixMark(item.totalMarks)}M
+            </span>
           </div>
-          <div className="flex justify-between items-center mt-0.5 gap-1">
-            <span className="font-semibold sm:text-[9px] text-[7px] opacity-80 text-fuchsia-800">{(item.knowledgeLevelB || item.knowledgeLevel).substring(0, 3).toUpperCase()}</span>
-            <span className="sm:text-[8px] text-[6px] opacity-70 font-semibold text-fuchsia-800">{(item.cognitiveProcessB || item.cognitiveProcess).split(' ')[0]}</span>
-            <span className="sm:text-[8px] text-[6px] opacity-80 font-bold text-fuchsia-800">{item.itemFormatB || item.itemFormat}</span>
+
+          <div className="flex justify-between items-center mt-0.5 gap-0.5 text-[7px] lg:text-[8px] leading-none text-fuchsia-800">
+            <span className="font-bold opacity-80 truncate">{(item.knowledgeLevelB || item.knowledgeLevel).substring(0, 3).toUpperCase()}</span>
+            <span className="opacity-70 font-semibold truncate">{(item.cognitiveProcessB || item.cognitiveProcess).split(' ')[0]}</span>
+            <span className="opacity-85 font-bold truncate">{String(item.itemFormatB || item.itemFormat).split(' ')[0]}</span>
           </div>
+
           {!readOnly && (
             <button
+              type="button"
               onClick={e => { e.stopPropagation(); onUpdate(item.id, 'hasInternalChoice', false); }}
-              className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-purple-500 text-white flex items-center justify-center opacity-0 hover:bg-purple-600 transition-opacity text-[9px] font-bold z-10 group-hover/or:opacity-100"
+              className="hidden lg:flex absolute -top-1 -right-1 w-4 h-4 rounded-full bg-purple-500 text-white items-center justify-center opacity-0 hover:bg-purple-600 transition-opacity text-[9px] font-bold z-10 group-hover/or:opacity-100"
               title="Remove OR"
             >
               ×
@@ -1714,41 +1809,106 @@ const ItemCard: React.FC<ItemCardProps> = ({
         </div>
       )}
 
-      {/* Edit popover */}
+      {/* Main Edit Modal — Landscape & Mobile Scroll Optimized */}
       {isEditing && !renderAsOptionB && createPortal(
-        <div 
-          className="fixed inset-0 z-[9990] overflow-y-auto bg-slate-900/60 backdrop-blur-sm no-print"
+        <div
+          className="fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/65 backdrop-blur-sm p-2 sm:p-4 no-print"
           onClick={onClose}
         >
-          <div className="flex min-h-full items-center justify-center p-4 text-center">
-            <div
-              className="bg-white rounded-2xl shadow-2xl p-6 sm:w-[540px] w-full max-w-full border border-slate-100 overflow-visible space-y-4 text-sm relative text-left animate-fade-in text-slate-800"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                <span className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                  <Settings size={18} className="text-indigo-600" />
-                  Edit Item ({formatMatrixMark(item.marksPerQuestion)}M)
-                </span>
-                <button 
-                  onClick={onClose} 
-                  className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1 hover:bg-slate-50 rounded-full"
-                >
-                  <X size={18} />
-                </button>
-              </div>
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-[600px] max-h-[92dvh] flex flex-col border border-slate-200 overflow-hidden text-sm text-left text-slate-800 animate-fade-in"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Sticky Modal Header */}
+            <div className="shrink-0 flex justify-between items-center px-4 py-2.5 sm:px-5 sm:py-3.5 border-b border-slate-100 bg-slate-50/90">
+              <span className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-2 truncate">
+                <Settings size={17} className="text-indigo-600 shrink-0" />
+                Edit Question ({formatMatrixMark(item.marksPerQuestion)}M · {itemTime}m)
+              </span>
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-slate-500 hover:text-slate-800 transition-colors cursor-pointer p-1.5 hover:bg-slate-200/70 rounded-full shrink-0"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-visible pr-1">
+            {/* Smooth Scrollable Modal Body */}
+            <div
+              className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 sm:py-4 custom-scrollbar"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
+              <div className="grid grid-cols-1 min-[440px]:grid-cols-2 gap-3 pb-8">
+                {/* Unit & Sub-unit Quick Move (Always accessible on Mobile/Tablet) */}
+                <div className="min-[440px]:col-span-2 grid grid-cols-1 min-[440px]:grid-cols-2 gap-2.5 p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-100">
+                  <div className="min-[440px]:col-span-2 text-[10px] font-bold text-indigo-700 uppercase tracking-wider">
+                    அலகு & துணை அலகு மாற்றம் (Move Unit / Sub-Unit)
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-600 font-semibold uppercase mb-1">Unit (அலகு)</label>
+                    <RelativeSelect
+                      value={item.unitId}
+                      onChange={handleUnitChangeInModal}
+                      options={curriculum.units.map(u => ({ value: u.id, label: `${u.unitNumber}. ${u.name}` }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-600 font-semibold uppercase mb-1">Sub-Unit (துணை அலகு)</label>
+                    <RelativeSelect
+                      value={item.subUnitId}
+                      onChange={handleSubUnitChangeInModal}
+                      options={optionSubUnits.map(su => ({ value: su.id, label: su.name }))}
+                    />
+                  </div>
+                </div>
+
+                {/* Question Number */}
                 <div>
-                  <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Question Count</label>
+                  <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Question Number (வினா எண்)</label>
                   <input
-                    type="number" min="0" max="10"
-                    value={isNaN(item.questionCount) ? '' : item.questionCount}
-                    onChange={e => onUpdate(item.id, 'questionCount', Number(e.target.value) || 0)}
-                    className="w-full text-sm border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all"
+                    type="text"
+                    value={item.qNo !== undefined ? item.qNo : (qNumber || `${item.questionCount}Q`)}
+                    onChange={e => onUpdate(item.id, 'qNo', e.target.value)}
+                    placeholder="e.g. Q# 1"
+                    className="w-full text-xs font-bold border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all"
                   />
                 </div>
 
+                {/* Answering Time */}
+                <div>
+                  <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1 flex items-center gap-1">
+                    <Clock size={11} className="text-indigo-600" /> Answering Time (நிமிடங்கள்)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="180"
+                    value={item.time !== undefined && !isNaN(Number(item.time)) ? item.time : getDefaultQuestionTime(item.marksPerQuestion, item.questionCount)}
+                    onChange={e => onUpdate(item.id, 'time', Math.max(0, Number(e.target.value) || 0))}
+                    className="w-full text-xs font-bold border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all"
+                  />
+                </div>
+
+                {/* Question Count */}
+                <div>
+                  <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Question Count</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={isNaN(item.questionCount) ? '' : item.questionCount}
+                    onChange={e => {
+                      const nextCount = Number(e.target.value) || 0;
+                      onUpdate(item.id, 'questionCount', nextCount);
+                      onUpdate(item.id, 'time', getDefaultQuestionTime(item.marksPerQuestion, nextCount));
+                    }}
+                    className="w-full text-xs border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all"
+                  />
+                </div>
+
+                {/* Knowledge Level */}
                 <div>
                   <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Knowledge Level (A)</label>
                   <RelativeSelect
@@ -1758,6 +1918,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
                   />
                 </div>
 
+                {/* Cognitive Process */}
                 <div>
                   <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Cognitive Process (A)</label>
                   <RelativeSelect
@@ -1767,8 +1928,9 @@ const ItemCard: React.FC<ItemCardProps> = ({
                   />
                 </div>
 
+                {/* Item Format */}
                 <div>
-                  <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Item Format</label>
+                  <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Item Format (A)</label>
                   <RelativeSelect
                     value={item.itemFormat}
                     onChange={val => handleFormatChange('itemFormat', val as ItemFormat)}
@@ -1776,42 +1938,86 @@ const ItemCard: React.FC<ItemCardProps> = ({
                   />
                 </div>
 
-                {item.marksPerQuestion >= 3 && item.marksPerQuestion <= 6 && (
-                  <div className="sm:col-span-2">
-                    <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Discourse</label>
-                    <select value={item.discourseId || ''} onChange={e => { const id = e.target.value || undefined; onUpdate(item.id, 'discourseId', id); onUpdate(item.id, 'enableDiscourse', !!id); const d = discourses.find(entry => entry.id === id); if (id && item.marksPerQuestion === 3 && /சிறுகுறிப்பு|short\s*note/i.test((d?.name || '') + ' ' + (d?.description || ''))) onUpdate(item.id, 'itemFormat', ItemFormat.CRS1); }} className="w-full text-sm border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                      <option value="">None</option>
-                      {discourses.filter(d => d.marks === item.marksPerQuestion).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                {/* Discourse A */}
+                {Number(item.marksPerQuestion) >= 3 && Number(item.marksPerQuestion) <= 6 && (
+                  <div className="min-[440px]:col-span-2">
+                    <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">
+                      Discourse (A) — ({formatMatrixMark(item.marksPerQuestion)}M)
+                    </label>
+                    <select
+                      value={item.discourseId || ''}
+                      onChange={e => {
+                        const id = e.target.value || undefined;
+                        onUpdate(item.id, 'discourseId', id);
+                        onUpdate(item.id, 'enableDiscourse', !!id);
+                        const d = matchingDiscourses.find(entry => entry.id === id);
+                        if (id && Number(item.marksPerQuestion) === 3 && /சிறுகுறிப்பு|short\s*note/i.test((d?.name || '') + ' ' + (d?.description || ''))) {
+                          onUpdate(item.id, 'itemFormat', ItemFormat.CRS1);
+                        }
+                      }}
+                      className="w-full text-xs border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+                    >
+                      <option value="">None (தேர்ந்தெடுக்கவும்)</option>
+                      {matchingDiscourses.map(d => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}{d.marks ? ` (${d.marks}M)` : ''}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 )}
 
-                <div className="sm:col-span-2 flex items-center gap-2 py-1">
-                  <input type="checkbox" id={`or-${item.id}`}
+                {/* Internal Choice Toggle */}
+                <div className="min-[440px]:col-span-2 flex items-center gap-2 py-1">
+                  <input
+                    type="checkbox"
+                    id={`or-${item.id}`}
                     checked={item.hasInternalChoice}
                     onChange={e => onUpdate(item.id, 'hasInternalChoice', e.target.checked)}
                     disabled={item.marksPerQuestion === 1}
-                    className="rounded text-indigo-600 focus:ring-indigo-400 border-slate-300" />
-                  <label htmlFor={`or-${item.id}`} className="text-xs text-slate-700 font-medium cursor-pointer">Internal Choice (OR)</label>
+                    className="rounded text-indigo-600 focus:ring-indigo-400 border-slate-300 w-4 h-4"
+                  />
+                  <label htmlFor={`or-${item.id}`} className="text-xs text-slate-700 font-semibold cursor-pointer">
+                    Internal Choice (OR — அ / ஆ வினா)
+                  </label>
                 </div>
 
+                {/* Option B Settings */}
                 {item.hasInternalChoice && (
-                  <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-purple-100">
-                    <div className="sm:col-span-2 text-[10px] font-bold text-purple-600 uppercase tracking-wider">Option B Settings</div>
+                  <div className="min-[440px]:col-span-2 grid grid-cols-1 min-[440px]:grid-cols-2 gap-3 pt-3 border-t border-purple-100 bg-purple-50/40 p-2.5 rounded-xl">
+                    <div className="min-[440px]:col-span-2 text-[10px] font-bold text-purple-700 uppercase tracking-wider">
+                      Option B Settings (ஆ வினா)
+                    </div>
 
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Option B Unit (அலகு)</label>
+                      <RelativeSelect
+                        value={item.unitIdB || item.unitId}
+                        onChange={val => {
+                          const targetU = curriculum.units.find(u => u.id === val);
+                          onUpdate(item.id, 'unitIdB', val);
+                          if (targetU?.subUnits?.[0]) {
+                            onUpdate(item.id, 'subUnitIdB', targetU.subUnits[0].id);
+                          }
+                        }}
+                        options={curriculum.units.map(u => ({ value: u.id, label: `${u.unitNumber}. ${u.name}` }))}
+                        themeColor="purple"
+                      />
+                    </div>
 
                     <div>
                       <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Option B Sub-unit</label>
                       <RelativeSelect
                         value={item.subUnitIdB || item.subUnitId}
                         onChange={val => {
-                          onUpdate(item.id, 'unitIdB', item.unitId);
+                          onUpdate(item.id, 'unitIdB', item.unitIdB || item.unitId);
                           onUpdate(item.id, 'subUnitIdB', val);
                         }}
-                        options={optionSubUnits.map(v => ({ value: v.id, label: v.name }))}
+                        options={optionBSubUnits.map(v => ({ value: v.id, label: v.name }))}
                         themeColor="purple"
                       />
                     </div>
+
                     <div>
                       <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Knowledge Level (B)</label>
                       <input
@@ -1820,6 +2026,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
                         className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-slate-50 text-slate-500 font-medium"
                       />
                     </div>
+
                     <div>
                       <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Cognitive Process (B)</label>
                       <RelativeSelect
@@ -1829,6 +2036,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
                         themeColor="purple"
                       />
                     </div>
+
                     <div>
                       <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Item Format (B)</label>
                       <RelativeSelect
@@ -1838,39 +2046,155 @@ const ItemCard: React.FC<ItemCardProps> = ({
                         themeColor="purple"
                       />
                     </div>
+
+                    {Number(item.marksPerQuestion) >= 3 && Number(item.marksPerQuestion) <= 6 && (
+                      <div className="min-[440px]:col-span-2">
+                        <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">
+                          Discourse (B) — ({formatMatrixMark(item.marksPerQuestion)}M)
+                        </label>
+                        <select
+                          value={item.discourseIdB || ''}
+                          onChange={e => {
+                            const id = e.target.value || undefined;
+                            onUpdate(item.id, 'discourseIdB', id);
+                            onUpdate(item.id, 'enableDiscourseB', !!id);
+                            const d = matchingDiscourses.find(entry => entry.id === id);
+                            if (id && Number(item.marksPerQuestion) === 3 && /சிறுகுறிப்பு|short\s*note/i.test((d?.name || '') + ' ' + (d?.description || ''))) {
+                              onUpdate(item.id, 'itemFormatB', ItemFormat.CRS1);
+                            }
+                          }}
+                          className="w-full text-xs border border-purple-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white"
+                        >
+                          <option value="">None (தேர்ந்தெடுக்கவும்)</option>
+                          {matchingDiscourses.map(d => (
+                            <option key={d.id} value={d.id}>
+                              {d.name}{d.marks ? ` (${d.marks}M)` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
+            </div>
 
-              <div className="border-t border-slate-100 pt-3 flex justify-end">
-                <button 
-                  onClick={onClose}
-                  className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-indigo-100 cursor-pointer"
+            {/* Sticky Modal Footer */}
+            <div className="shrink-0 border-t border-slate-100 px-4 py-2.5 sm:px-5 sm:py-3 bg-slate-50/90 flex justify-between items-center gap-2">
+              {!readOnly && onRemove && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onRemove(item.id);
+                  }}
+                  className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl transition-all cursor-pointer"
                 >
-                  Done
+                  Delete Item
                 </button>
-              </div>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                className="ml-auto px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-indigo-100 cursor-pointer"
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>,
         document.body
       )}
+
+      {/* Option B Modal — Scroll Optimized */}
       {isEditing && renderAsOptionB && createPortal(
-        <div className="fixed inset-0 z-[9991] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 no-print" onClick={onClose}>
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between border-b border-purple-100 pb-3">
-              <strong className="text-sm text-slate-800">ஆ வினா — Discourse ({formatMatrixMark(item.marksPerQuestion)}M)</strong>
-              <button onClick={onClose} className="rounded-full p-1 text-slate-400 hover:bg-slate-50"><X size={18} /></button>
+        <div
+          className="fixed inset-0 z-[9991] flex items-center justify-center bg-slate-900/65 backdrop-blur-sm p-2 sm:p-4 no-print"
+          onClick={onClose}
+        >
+          <div
+            className="w-full max-w-[440px] max-h-[92dvh] flex flex-col rounded-2xl bg-white shadow-2xl border border-purple-100 overflow-hidden text-left"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="shrink-0 flex items-center justify-between px-4 py-2.5 border-b border-purple-100 bg-purple-50/60">
+              <strong className="text-sm text-slate-800">ஆ வினா (Option B) — ({formatMatrixMark(item.marksPerQuestion)}M)</strong>
+              <button type="button" onClick={onClose} className="rounded-full p-1 text-slate-500 hover:bg-purple-100">
+                <X size={18} />
+              </button>
             </div>
-            {item.marksPerQuestion >= 3 && item.marksPerQuestion <= 6 ? (
-              <select value={item.discourseIdB || ''} onChange={e => { const id = e.target.value || undefined; onUpdate(item.id, 'discourseIdB', id); onUpdate(item.id, 'enableDiscourseB', !!id); const d = discourses.find(entry => entry.id === id); if (id && item.marksPerQuestion === 3 && /சிறுகுறிப்பு|short\s*note/i.test((d?.name || '') + ' ' + (d?.description || ''))) onUpdate(item.id, 'itemFormatB', ItemFormat.CRS1); }} className="w-full rounded-lg border border-purple-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300">
-                <option value="">None</option>
-                {discourses.filter(d => d.marks === item.marksPerQuestion).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
-            ) : <p className="text-xs text-slate-500">3 முதல் 6 மதிப்பெண் வினாக்களுக்கு மட்டுமே Discourse தேர்வு செய்யலாம்.</p>}
-            <button onClick={onClose} className="mt-4 w-full rounded-lg bg-purple-600 px-4 py-2 text-xs font-bold text-white">சரி</button>
+
+            <div
+              className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3 custom-scrollbar pb-8"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
+              <div>
+                <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Option B Sub-unit (துணை அலகு)</label>
+                <RelativeSelect
+                  value={item.subUnitIdB || item.subUnitId}
+                  onChange={val => {
+                    onUpdate(item.id, 'unitIdB', item.unitIdB || item.unitId);
+                    onUpdate(item.id, 'subUnitIdB', val);
+                  }}
+                  options={optionBSubUnits.map(v => ({ value: v.id, label: v.name }))}
+                  themeColor="purple"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Cognitive Process (B)</label>
+                <RelativeSelect
+                  value={item.cognitiveProcessB || item.cognitiveProcess}
+                  onChange={val => onUpdate(item.id, 'cognitiveProcessB', val as CognitiveProcess)}
+                  options={allowedCPs}
+                  themeColor="purple"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Item Format (B)</label>
+                <RelativeSelect
+                  value={item.itemFormatB || item.itemFormat}
+                  onChange={val => handleFormatChange('itemFormatB', val as ItemFormat)}
+                  options={Object.values(ItemFormat)}
+                  themeColor="purple"
+                />
+              </div>
+
+              {Number(item.marksPerQuestion) >= 3 && Number(item.marksPerQuestion) <= 6 && (
+                <div>
+                  <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Discourse (B)</label>
+                  <select
+                    value={item.discourseIdB || ''}
+                    onChange={e => {
+                      const id = e.target.value || undefined;
+                      onUpdate(item.id, 'discourseIdB', id);
+                      onUpdate(item.id, 'enableDiscourseB', !!id);
+                      const d = matchingDiscourses.find(entry => entry.id === id);
+                      if (id && Number(item.marksPerQuestion) === 3 && /சிறுகுறிப்பு|short\s*note/i.test((d?.name || '') + ' ' + (d?.description || ''))) {
+                        onUpdate(item.id, 'itemFormatB', ItemFormat.CRS1);
+                      }
+                    }}
+                    className="w-full rounded-lg border border-purple-200 p-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300 bg-white"
+                  >
+                    <option value="">None (தேர்ந்தெடுக்கவும்)</option>
+                    {matchingDiscourses.map(d => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}{d.marks ? ` (${d.marks}M)` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="shrink-0 px-4 py-2.5 border-t border-purple-100 bg-purple-50/40">
+              <button type="button" onClick={onClose} className="w-full rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white transition-colors">
+                சரி
+              </button>
+            </div>
           </div>
-        </div>, document.body
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -1889,65 +2213,82 @@ interface SummaryBarProps {
   onSave?: () => void;
   isSaving?: boolean;
 }
-const SummaryBar: React.FC<SummaryBarProps> = ({ 
-  result, 
-  totalMarks, 
-  readOnly, 
-  isAdmin = false, 
-  isConfirmed = false, 
-  onRegenerate, 
-  onConfirm, 
-  onSave, 
-  isSaving 
+
+const SummaryBar: React.FC<SummaryBarProps> = ({
+  result,
+  totalMarks,
+  readOnly,
+  isAdmin = false,
+  isConfirmed = false,
+  onRegenerate,
+  onConfirm,
+  onSave,
+  isSaving
 }) => {
   const filled = result.grandTotal;
-  
   const showActions = !readOnly && (!isConfirmed || isAdmin);
   const showResetAndConfirm = !isConfirmed;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 md:gap-4 text-[10px] md:text-xs bg-gray-50/50 p-2 rounded-xl border border-gray-100 shadow-sm">
+    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5 text-[10px] md:text-xs bg-slate-50/90 px-2.5 py-1.5 sm:p-2 rounded-xl border border-slate-200/80 shadow-xs">
       {showResetAndConfirm && ([KnowledgeLevel.BASIC, KnowledgeLevel.AVERAGE, KnowledgeLevel.PROFOUND] as KnowledgeLevel[]).map(kl => {
         const { marks, target } = result.klSummary[kl] || { marks: 0, target: 0 };
         const c = KL_COLORS[kl];
         const ok = marks === target;
         return (
-          <div key={kl} className={`px-3 py-1.5 rounded-full border font-bold ${ok && marks > 0 ? c.badge : 'bg-white text-gray-400 border-gray-200'}`}>
-            {kl.toUpperCase()}: {marks}/{target}M
+          <div key={kl} className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border font-bold text-[9px] sm:text-[10px] ${ok && marks > 0 ? c.badge : 'bg-white text-gray-400 border-gray-200'}`}>
+            {kl.substring(0, 3).toUpperCase()}: {marks}/{target}M
           </div>
         );
       })}
 
       {showActions && (
-        <div className="flex items-center gap-2 ml-2 border-l pl-4 border-gray-200">
+        <div className="flex items-center gap-1.5 sm:ml-1 sm:border-l sm:pl-2.5 border-gray-200">
           {showResetAndConfirm && (
-            <button onClick={() => onRegenerate?.()} disabled={!onRegenerate}
-              className="bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-lg font-bold hover:bg-amber-100 flex items-center gap-1.5 transition-all text-[10px] shadow-sm">
-              <RefreshCw size={12} /> Reset
+            <button
+              onClick={() => onRegenerate?.()}
+              disabled={!onRegenerate}
+              className="bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-lg font-bold hover:bg-amber-100 flex items-center gap-1 transition-all text-[10px]"
+            >
+              <RefreshCw size={11} /> Reset
             </button>
           )}
-          <button onClick={() => onSave?.()} disabled={isSaving || !onSave}
-            className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-700 flex items-center gap-1.5 transition-all text-[10px] shadow-sm shadow-emerald-100 disabled:opacity-50">
-            {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />} {isSaving ? 'Saving' : 'Save'}
+          <button
+            onClick={() => onSave?.()}
+            disabled={isSaving || !onSave}
+            className="bg-emerald-600 text-white px-2.5 py-1 rounded-lg font-bold hover:bg-emerald-700 flex items-center gap-1 transition-all text-[10px] disabled:opacity-50"
+          >
+            {isSaving ? <RefreshCw size={11} className="animate-spin" /> : <Save size={11} />} {isSaving ? 'Saving' : 'Save'}
           </button>
           {showResetAndConfirm && (
-            <button onClick={() => onConfirm?.()} disabled={!onConfirm}
-              className="bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-blue-700 flex items-center gap-1.5 transition-all text-[10px] shadow-sm shadow-blue-100">
-              <CheckCircle size={12} /> Confirm
+            <button
+              onClick={() => onConfirm?.()}
+              disabled={!onConfirm}
+              className="bg-blue-600 text-white px-2.5 py-1 rounded-lg font-bold hover:bg-blue-700 flex items-center gap-1 transition-all text-[10px]"
+            >
+              <CheckCircle size={11} /> Confirm
             </button>
           )}
         </div>
       )}
 
-      <div className="ml-auto flex items-center gap-2 pr-2">
-        <div className="text-gray-500 font-bold uppercase tracking-wider text-[9px]">Grand Total:</div>
-        <div className={`font-black text-sm md:text-lg ${filled === totalMarks ? 'text-green-600' : 'text-red-600'}`}>
-          {filled}/{totalMarks}M
+      <div className="ml-auto flex items-center gap-3 pr-1">
+        <div className="flex items-center gap-1">
+          <Clock size={12} className="text-indigo-600" />
+          <span className="font-black text-[11px] sm:text-xs text-indigo-700">{result.grandTime}m</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-gray-500 font-bold uppercase text-[9px] hidden sm:inline">Total:</span>
+          <span className={`font-black text-xs sm:text-sm ${filled === totalMarks ? 'text-green-600' : 'text-red-600'}`}>
+            {filled}/{totalMarks}M
+          </span>
         </div>
       </div>
     </div>
   );
 };
+
+// ─── Alert Utilities ─────────────────────────────────────────────────────────
 
 const escapeAlertHtml = (value: string) => value
   .replace(/&/g, '&amp;')
@@ -1999,9 +2340,8 @@ interface BlueprintSummaryTableProps {
 
 const BlueprintSummaryTable: React.FC<BlueprintSummaryTableProps> = ({ blueprint, validation }) => {
   const items = blueprint.items;
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
 
-  // Reorder and include all categories even if count is 0
   const klRows = Object.values(KnowledgeLevel).map(kl => ({
     label: kl,
     count: items.filter(i => i.knowledgeLevel === kl).reduce((acc, i) => acc + i.questionCount, 0),
@@ -2009,9 +2349,8 @@ const BlueprintSummaryTable: React.FC<BlueprintSummaryTableProps> = ({ blueprint
   }));
 
   const formatRows = Object.values(ItemFormat).map(f => {
-    // Match by exact value or if the item format is the short code (SR1, etc)
-    const relevantItems = items.filter(i => 
-      i.itemFormat === f || 
+    const relevantItems = items.filter(i =>
+      i.itemFormat === f ||
       i.itemFormat === (f as string).split(' ')[0] ||
       (f as string).includes(`(${i.itemFormat})`)
     );
@@ -2023,9 +2362,9 @@ const BlueprintSummaryTable: React.FC<BlueprintSummaryTableProps> = ({ blueprint
   });
 
   const cpRows = Object.values(CognitiveProcess).map(cp => {
-    const code = cp.split(' ')[0]; // CP1, CP2...
-    const relevantItems = items.filter(i => 
-      i.cognitiveProcess === cp || 
+    const code = cp.split(' ')[0];
+    const relevantItems = items.filter(i =>
+      i.cognitiveProcess === cp ||
       i.cognitiveProcess === code ||
       (i.cognitiveProcess as string)?.startsWith(code)
     );
@@ -2036,7 +2375,6 @@ const BlueprintSummaryTable: React.FC<BlueprintSummaryTableProps> = ({ blueprint
     };
   });
 
-  // FIX: correct withOR/withoutOR counts
   const withORItems = items.filter(i => i.hasInternalChoice);
   const withoutORItems = items.filter(i => !i.hasInternalChoice);
   const withORCount = withORItems.reduce((a, i) => a + i.questionCount, 0);
@@ -2044,34 +2382,35 @@ const BlueprintSummaryTable: React.FC<BlueprintSummaryTableProps> = ({ blueprint
   const withORMarks = withORItems.reduce((a, i) => a + i.totalMarks, 0);
   const withoutORMarks = withoutORItems.reduce((a, i) => a + i.totalMarks, 0);
 
-  // FIX: correct totalItems (no double-count)
   const totalItems = items.reduce((acc, i) => acc + i.questionCount, 0);
   const totalM = validation.grandTotal;
+  const totalTime = validation.grandTime;
 
   return (
     <div className="border border-blue-200 rounded-xl overflow-hidden">
-      <button onClick={() => setOpen(o => !o)}
-        className="w-full flex justify-between items-center px-4 py-3 bg-blue-50 text-blue-800 font-bold text-sm hover:bg-blue-100 transition-colors">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex justify-between items-center px-4 py-2.5 bg-blue-50 text-blue-800 font-bold text-xs sm:text-sm hover:bg-blue-100 transition-colors"
+      >
         <span className="flex items-center gap-2"><Info size={14} /> Blueprint Summary</span>
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-normal text-blue-500">Grand Total: {totalItems} Items | {totalM} Marks</span>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="text-[10px] sm:text-xs font-normal text-blue-600">{totalItems} Qns | {totalM}M | {totalTime}m</span>
           {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </div>
       </button>
 
       {open && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-0 divide-y divide-x divide-gray-200 border-t border-gray-200">
-          <SummaryColumn title="Knowledge Level"
-            rows={klRows} />
-          <SummaryColumn title="Item Format"
-            rows={formatRows} />
-          <SummaryColumn title="Option / Choice"
+          <SummaryColumn title="Knowledge Level" rows={klRows} />
+          <SummaryColumn title="Item Format" rows={formatRows} />
+          <SummaryColumn
+            title="Option / Choice"
             rows={[
               { label: 'With Choice', count: withORCount, marks: withORMarks },
               { label: 'Without Choice', count: withoutORCount, marks: withoutORMarks },
-            ]} />
-          <SummaryColumn title="Cognitive Process"
-            rows={cpRows.map(r => ({ label: r.label, count: r.count, marks: r.marks }))} />
+            ]}
+          />
+          <SummaryColumn title="Cognitive Process" rows={cpRows.map(r => ({ label: r.label, count: r.count, marks: r.marks }))} />
         </div>
       )}
     </div>
@@ -2082,6 +2421,7 @@ interface SummaryColumnProps {
   title: string;
   rows: { label: string; count: number; marks: number }[];
 }
+
 const SummaryColumn: React.FC<SummaryColumnProps> = ({ title, rows }) => {
   const totalQns = rows.reduce((sum, r) => sum + r.count, 0);
   const totalMarks = rows.reduce((sum, r) => sum + r.marks, 0);
@@ -2102,14 +2442,14 @@ const SummaryColumn: React.FC<SummaryColumnProps> = ({ title, rows }) => {
             const isTamil = /[\u0B80-\u0BFF]/.test(r.label);
             return (
               <tr key={i} className="border-t border-gray-100">
-                <td className={`py-1 text-gray-700 font-medium ${isTamil ? 'tamil-font' : 'text-[9px] leading-tight'}`}
-                  lang={isTamil ? 'ta' : 'en'}>{r.label}</td>
+                <td className={`py-1 text-gray-700 font-medium ${isTamil ? 'tamil-font' : 'text-[9px] leading-tight'}`} lang={isTamil ? 'ta' : 'en'}>
+                  {r.label}
+                </td>
                 <td className="py-1 text-center text-gray-600">{r.count}</td>
                 <td className="py-1 text-center font-bold text-gray-800">{r.marks}</td>
               </tr>
             );
           })}
-          {/* Total Row */}
           <tr className="border-t-2 border-gray-200 bg-gray-50/50">
             <td className="py-1.5 text-gray-900 font-black uppercase text-[9px]">Total</td>
             <td className="py-1.5 text-center text-gray-900 font-black">{totalQns}</td>
@@ -2166,29 +2506,177 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
   const [activeOptionGroupId, setActiveOptionGroupId] = useState<string | null>(null);
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const touchDragRef = useRef<{ itemId: string; isOptionB: boolean; startX: number; startY: number; moved: boolean; activated: boolean; timerId?: number } | null>(null);
+  const [touchGhost, setTouchGhost] = useState<{ x: number; y: number; label: string; isOptionB: boolean } | null>(null);
+
+  // Mobile & Landscape Orientation State
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [dismissedRotateBanner, setDismissedRotateBanner] = useState(false);
+  const rootWrapperRef = useRef<HTMLDivElement>(null);
+
+  const touchDragRef = useRef<{
+    itemId: string;
+    isOptionB: boolean;
+    label: string;
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+    moved: boolean;
+    activated: boolean;
+    timerId?: number;
+  } | null>(null);
+  const lastTapMapRef = useRef<Record<string, number>>({});
+
+  // Auto-switch to Landscape Mode on Mobile Open + Orientation Tracking
+  useEffect(() => {
+    const checkViewport = () => {
+      const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+      const mobileWidth = typeof window !== 'undefined' && Math.min(window.innerWidth, window.innerHeight) < 768;
+      setIsMobileDevice(coarsePointer || mobileWidth);
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+
+    checkViewport();
+
+    // Attempt automatic landscape lock on mount for mobile devices
+    const tryAutoLockLandscape = async () => {
+      const coarse = window.matchMedia('(pointer: coarse)').matches;
+      if (!coarse) return;
+      try {
+        const orientationApi = screen.orientation as ScreenOrientation & {
+          lock?: (orientation: string) => Promise<void>;
+        };
+        if (orientationApi?.lock) {
+          await orientationApi.lock('landscape');
+        }
+      } catch {
+        // Mobile browsers may require fullscreen/user gesture; handled by 1-tap button
+      }
+    };
+
+    void tryAutoLockLandscape();
+
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    window.addEventListener('resize', checkViewport);
+    window.addEventListener('orientationchange', checkViewport);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+    return () => {
+      window.removeEventListener('resize', checkViewport);
+      window.removeEventListener('orientationchange', checkViewport);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      try {
+        const orientationApi = screen.orientation as ScreenOrientation & { unlock?: () => void };
+        orientationApi?.unlock?.();
+      } catch {
+        // Ignore unlock errors
+      }
+    };
+  }, []);
+
+  const handleToggleLandscapeFullscreen = useCallback(async () => {
+    try {
+      const orientationApi = screen.orientation as ScreenOrientation & {
+        lock?: (orientation: string) => Promise<void>;
+        unlock?: () => void;
+      };
+
+      if (!document.fullscreenElement) {
+        const targetEl = document.documentElement;
+        if (targetEl.requestFullscreen) {
+          await targetEl.requestFullscreen();
+        }
+        if (orientationApi?.lock) {
+          await orientationApi.lock('landscape');
+        }
+      } else {
+        orientationApi?.unlock?.();
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      }
+    } catch {
+      // Fallback hint if browser restricts orientation API (e.g., iOS Safari)
+      Swal.fire({
+        toast: true,
+        position: 'top',
+        icon: 'info',
+        title: 'சிறந்த பார்வைக்கு உங்கள் மொபைலை லேன்ட்ஸ்கேப் மோடில் திருப்பவும்',
+        showConfirmButton: false,
+        timer: 2600,
+      });
+    }
+  }, []);
+
+  // Fallback to DB or curriculum discourses if discourses prop is empty
+  const effectiveDiscourses = useMemo<Discourse[]>(() => {
+    if (discourses && discourses.length > 0) return discourses;
+    const db = getDB() as any;
+    const currAny = curriculum as any;
+    if (Array.isArray(currAny?.discourses) && currAny.discourses.length > 0) {
+      return currAny.discourses;
+    }
+    if (Array.isArray(db?.discourses) && db.discourses.length > 0) {
+      return db.discourses;
+    }
+    if (Array.isArray(db?.curriculums)) {
+      const matchedCurr = db.curriculums.find((c: any) => c.id === curriculum.id || (c.subject === curriculum.subject && c.classLevel === curriculum.classLevel));
+      if (Array.isArray(matchedCurr?.discourses) && matchedCurr.discourses.length > 0) {
+        return matchedCurr.discourses;
+      }
+    }
+    return [];
+  }, [discourses, curriculum]);
 
   const sections = useMemo(
     () => [...(paperType?.sections || [])].sort((a, b) => a.marks - b.marks),
     [paperType],
   );
 
-  const validation = useMemo(
-    () => {
-      try {
-        return validateBlueprint(blueprint, paperType, curriculum);
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : 'தெரியாத validation பிழை';
-        return failedValidation(
-          blueprint.items.reduce((sum, item) => sum + (Number(item.totalMarks) || 0), 0),
-          'VALIDATION_UNEXPECTED',
-          'Matrix validation-ஐ முடிக்க முடியவில்லை.',
-          `காரணம்: ${reason}. Configuration மற்றும் blueprint தரவை சரிபார்க்கவும்.`,
-        );
-      }
-    },
-    [blueprint, paperType, curriculum],
-  );
+  // Balanced column widths for One-Look Fit-to-Screen (specifically optimized for 5 mark columns)
+  const columnWidths = useMemo(() => {
+    const count = Math.max(sections.length, 1);
+    if (isMobileDevice) {
+      const fixedTotal = 26.5; // # (3%) + UNIT (4.5%) + SUB UNIT (14.5%) + M (4.5%)
+      const perSection = (100 - fixedTotal) / count; // ~14.7% each for 5 columns
+      return {
+        num: '3%',
+        unit: '4.5%',
+        subUnit: '14.5%',
+        marks: '4.5%',
+        section: `${perSection.toFixed(2)}%`,
+      };
+    }
+    const fixedTotal = 29; // # (2.5%) + UNIT (4.5%) + SUB UNIT (18%) + M (4%)
+    const perSection = (100 - fixedTotal) / count; // ~14.2% each for 5 columns
+    return {
+      num: '2.5%',
+      unit: '4.5%',
+      subUnit: '18%',
+      marks: '4%',
+      section: `${perSection.toFixed(2)}%`,
+    };
+  }, [sections.length, isMobileDevice]);
+
+  const validation = useMemo(() => {
+    try {
+      return validateBlueprint(blueprint, paperType, curriculum);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'தெரியாத validation பிழை';
+      return failedValidation(
+        blueprint.items.reduce((sum, item) => sum + (Number(item.totalMarks) || 0), 0),
+        'VALIDATION_UNEXPECTED',
+        'Matrix validation-ஐ முடிக்க முடியவில்லை.',
+        `காரணம்: ${reason}. Configuration மற்றும் blueprint தரவை சரிபார்க்கவும்.`,
+      );
+    }
+  }, [blueprint, paperType, curriculum]);
+
   const handleValidatedSave = async () => {
     const blockers = validation.errors.filter(isStrictUnitWeightageError);
     const reviewItems = validation.errors.filter(error => error.type !== 'info' && !isStrictUnitWeightageError(error));
@@ -2205,6 +2693,7 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
       await Swal.fire({ title: 'சேமிக்க முடியவில்லை', text: `காரணம்: ${reason}`, icon: 'error', confirmButtonText: 'சரி' });
     }
   };
+
   const handleValidatedConfirm = async () => {
     const blockers = validation.errors.filter(isStrictUnitWeightageError);
     const reviewItems = validation.errors.filter(error => error.type !== 'info' && !isStrictUnitWeightageError(error));
@@ -2222,11 +2711,10 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
     }
   };
 
-  const questionNumbersMap = useMemo(() =>
-    computeQuestionNumbersMap(blueprint.items, sections, curriculum, paperType),
+  const questionNumbersMap = useMemo(
+    () => computeQuestionNumbersMap(blueprint.items, sections, curriculum, paperType),
     [blueprint.items, sections, curriculum, paperType]
   );
-
 
   React.useEffect(() => {
     if (readOnly) return;
@@ -2238,7 +2726,7 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
     });
   }, [blueprint.items, onUpdateItem, readOnly]);
 
-  // ── Drag handlers ────────────────────────────────────────────────────────────
+  // ── Desktop Drag Handlers ───────────────────────────────────────────────────
   const handleDragStart = useCallback((e: React.DragEvent, item: BlueprintItem, isOptionB: boolean = false) => {
     if (readOnly) return;
     e.dataTransfer.setData('text/plain', item.id);
@@ -2250,6 +2738,7 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
   const handleDragEnd = useCallback(() => {
     setDraggingItemId(null);
     setDropTarget(null);
+    setTouchGhost(null);
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -2258,19 +2747,11 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
     e.dataTransfer.dropEffect = 'move';
   }, [readOnly]);
 
-  const handleDrop = useCallback((e: React.DragEvent, unitId: string, subUnitId: string, sectionId: string) => {
-    if (readOnly) return;
-    e.preventDefault();
-    const itemId = e.dataTransfer.getData('text/plain');
-    const isOptionB = e.dataTransfer.getData('isOptionB') === 'true';
-    setDropTarget(null);
-    setDraggingItemId(null);
-    if (!itemId) return;
-
+  const executeItemDrop = useCallback((itemId: string, isOptionB: boolean, unitId: string, subUnitId: string, sectionId: string) => {
+    if (readOnly || !itemId) return;
     const item = blueprint.items.find(i => i.id === itemId);
     if (!item) return;
 
-    // Validation for unit change in option questions (Admin only)
     const isInternalChoice = item.hasInternalChoice || isOptionB;
     if (isAdmin && isInternalChoice && item.unitId !== unitId) {
       Swal.fire({
@@ -2279,76 +2760,166 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
         icon: 'warning',
         confirmButtonColor: '#4f46e5',
         confirmButtonText: 'சரி',
-        customClass: {
-          title: 'swal-tau-urai-title',
-          htmlContainer: 'swal-tau-paalai-content'
-        }
+        customClass: { title: 'swal-tau-urai-title', htmlContainer: 'swal-tau-paalai-content' }
       });
       return;
     }
-    
+
     if (isOptionB) {
       onUpdateItem(itemId, 'unitIdB', unitId);
       onUpdateItem(itemId, 'subUnitIdB', subUnitId);
     } else {
       onMoveItem(itemId, unitId, sectionId, subUnitId);
     }
-  }, [readOnly, onMoveItem, onUpdateItem, blueprint.items, isAdmin]);
+  }, [readOnly, blueprint.items, isAdmin, onUpdateItem, onMoveItem]);
 
-  const handleTouchPointerDown = useCallback((e: React.PointerEvent, item: BlueprintItem, isOptionB = false) => {
-    if (readOnly || e.pointerType !== 'touch') return;
-    const entry: NonNullable<typeof touchDragRef.current> = { itemId: item.id, isOptionB, startX: e.clientX, startY: e.clientY, moved: false, activated: !mobileGestures };
+  const handleDrop = useCallback((e: React.DragEvent, unitId: string, subUnitId: string, sectionId: string) => {
+    if (readOnly) return;
+    e.preventDefault();
+    const itemId = e.dataTransfer.getData('text/plain');
+    const isOptionB = e.dataTransfer.getData('isOptionB') === 'true';
+    setDropTarget(null);
+    setDraggingItemId(null);
+    executeItemDrop(itemId, isOptionB, unitId, subUnitId, sectionId);
+  }, [readOnly, executeItemDrop]);
+
+  // ── Enhanced Mobile Drag (Instant on Handle, Snappy 180ms Hold on Card) ─────
+  const handleTouchPointerDown = useCallback((e: React.PointerEvent, item: BlueprintItem, isOptionB = false, immediate = false) => {
+    if (readOnly) return;
+    if (e.pointerType !== 'touch' && !immediate) return;
     if (touchDragRef.current?.timerId) window.clearTimeout(touchDragRef.current.timerId);
+
+    const qLabel = `${item.qNo || questionNumbersMap.get(item.id) || `${item.questionCount}Q`}${isOptionB ? ' (ஆ)' : ''} · ${formatMatrixMark(item.totalMarks)}M`;
+    const entry: NonNullable<typeof touchDragRef.current> = {
+      itemId: item.id,
+      isOptionB,
+      label: qLabel,
+      startX: e.clientX,
+      startY: e.clientY,
+      currentX: e.clientX,
+      currentY: e.clientY,
+      moved: false,
+      activated: false,
+    };
+
+    const activateDrag = () => {
+      if (touchDragRef.current !== entry) return;
+      entry.activated = true;
+      setDraggingItemId(isOptionB ? `${item.id}:b` : item.id);
+      setTouchGhost({ x: entry.currentX, y: entry.currentY, label: entry.label, isOptionB });
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(25); } catch {}
+      }
+    };
+
     touchDragRef.current = entry;
-    if (mobileGestures) {
+
+    if (immediate) {
+      activateDrag();
+    } else {
       entry.timerId = window.setTimeout(() => {
-        if (touchDragRef.current === entry) {
-          entry.activated = true;
-          setDraggingItemId(isOptionB ? `${item.id}:b` : item.id);
-        }
-      }, 340);
+        if (!entry.moved) activateDrag();
+      }, 180);
     }
-  }, [readOnly, mobileGestures]);
+  }, [readOnly, questionNumbersMap]);
+
+  const handleTouchPointerUp = useCallback((e: React.PointerEvent, item: BlueprintItem, isOptionB = false, onDoubleTap?: () => void) => {
+    if (e.pointerType !== 'touch') return;
+    const drag = touchDragRef.current;
+    const wasDragging = drag && (drag.activated || drag.moved);
+
+    if (drag?.timerId) window.clearTimeout(drag.timerId);
+
+    if (!wasDragging) {
+      const key = isOptionB ? `${item.id}:b` : item.id;
+      const now = Date.now();
+      const lastTap = lastTapMapRef.current[key] || 0;
+      if (now - lastTap < 360) {
+        lastTapMapRef.current[key] = 0;
+        onDoubleTap?.();
+      } else {
+        lastTapMapRef.current[key] = now;
+      }
+    }
+  }, []);
 
   React.useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
       const drag = touchDragRef.current;
       if (!drag) return;
+      drag.currentX = event.clientX;
+      drag.currentY = event.clientY;
       const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
-      if (distance < 10) return;
-      // In the mobile teacher workspace, moving before the long-press timer expires
-      // is treated as scrolling, not dragging. Hold first, then drag to a destination.
-      if (mobileGestures && !drag.activated) {
-        if (drag.timerId) window.clearTimeout(drag.timerId);
-        touchDragRef.current = null;
+
+      if (!drag.activated) {
+        if (distance > 14) {
+          if (drag.timerId) window.clearTimeout(drag.timerId);
+          touchDragRef.current = null;
+        }
         return;
       }
+
       drag.moved = true;
-      setDraggingItemId(drag.isOptionB ? drag.itemId + ':b' : drag.itemId);
+      if (event.cancelable) event.preventDefault();
+
+      setTouchGhost({
+        x: event.clientX,
+        y: event.clientY,
+        label: drag.label,
+        isOptionB: drag.isOptionB,
+      });
+
+      const edgeThreshold = 52;
+      const scrollStep = 12;
+      if (event.clientY < edgeThreshold) {
+        window.scrollBy(0, -scrollStep);
+      } else if (event.clientY > window.innerHeight - edgeThreshold) {
+        window.scrollBy(0, scrollStep);
+      }
+      const scrollContainer = document.getElementById('matrix-scroll-container');
+      if (scrollContainer) {
+        const rect = scrollContainer.getBoundingClientRect();
+        if (event.clientX < rect.left + edgeThreshold) {
+          scrollContainer.scrollBy(-scrollStep, 0);
+        } else if (event.clientX > rect.right - edgeThreshold) {
+          scrollContainer.scrollBy(scrollStep, 0);
+        }
+      }
+
       const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-matrix-cell]');
       setDropTarget(cell?.dataset.matrixCell || null);
-      event.preventDefault();
     };
-    const onPointerUp = (event: PointerEvent) => {
+
+    const finishTouchDrag = (event: PointerEvent) => {
       const drag = touchDragRef.current;
       if (!drag) return;
       if (drag.timerId) window.clearTimeout(drag.timerId);
       touchDragRef.current = null;
-      if (drag.moved && drag.activated) {
+
+      if (drag.activated && drag.moved) {
         const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-matrix-cell]');
         const [unitId, subUnitId, sectionId] = (cell?.dataset.matrixCell || '').split(':');
         if (unitId && subUnitId && sectionId) {
-          const transfer = { getData: (key: string) => key === 'text/plain' ? drag.itemId : key === 'isOptionB' ? String(drag.isOptionB) : '' };
-          handleDrop({ preventDefault() {}, dataTransfer: transfer } as unknown as React.DragEvent, unitId, subUnitId, sectionId);
-        } else { setDraggingItemId(null); setDropTarget(null); }
-      } else { setDraggingItemId(null); setDropTarget(null); }
+          executeItemDrop(drag.itemId, drag.isOptionB, unitId, subUnitId, sectionId);
+        }
+      }
+      setDraggingItemId(null);
+      setDropTarget(null);
+      setTouchGhost(null);
     };
+
     window.addEventListener('pointermove', onPointerMove, { passive: false });
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerUp);
-    return () => { window.removeEventListener('pointermove', onPointerMove); window.removeEventListener('pointerup', onPointerUp); window.removeEventListener('pointercancel', onPointerUp); if (touchDragRef.current?.timerId) window.clearTimeout(touchDragRef.current.timerId); };
-  }, [handleDrop, mobileGestures]);
-  // ── Cell helpers ─────────────────────────────────────────────────────────────
+    window.addEventListener('pointerup', finishTouchDrag);
+    window.addEventListener('pointercancel', finishTouchDrag);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', finishTouchDrag);
+      window.removeEventListener('pointercancel', finishTouchDrag);
+      if (touchDragRef.current?.timerId) window.clearTimeout(touchDragRef.current.timerId);
+    };
+  }, [executeItemDrop]);
+
+  // ── Cell Helpers ─────────────────────────────────────────────────────────────
   const getCellItems = useCallback((unitId: string, subUnitId: string, sectionId: string): BlueprintItem[] =>
     blueprint.items.filter(i => i.unitId === unitId && i.subUnitId === subUnitId && i.sectionId === sectionId),
     [blueprint.items]);
@@ -2387,37 +2958,119 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
 
   useEffect(() => {
     if (!highlightedSubUnitId) return;
-    if (highlightTimer.current) {
-      window.clearTimeout(highlightTimer.current);
-    }
+    if (highlightTimer.current) window.clearTimeout(highlightTimer.current);
     highlightTimer.current = window.setTimeout(() => {
       setHighlightedSubUnitId(null);
       highlightTimer.current = null;
     }, 4000);
     return () => {
-      if (highlightTimer.current) {
-        window.clearTimeout(highlightTimer.current);
-      }
+      if (highlightTimer.current) window.clearTimeout(highlightTimer.current);
     };
   }, [highlightedSubUnitId]);
 
+  const showFullSubUnitName = (unitName: string, subUnitName: string) => {
+    Swal.fire({
+      toast: true,
+      position: 'top',
+      icon: 'info',
+      title: subUnitName,
+      text: unitName,
+      showConfirmButton: false,
+      timer: 2200,
+    });
+  };
+
   return (
-    <div className="flex flex-col sm:space-y-4 space-y-2 text-black w-full">
-      {/* Header */}
-      <div className="text-center sm:mb-2 mb-0.5">
-        <h2 className="sm:text-xl text-sm font-bold uppercase border-b-2 border-black inline-block px-3 sm:px-6 pb-0.5 tracking-widest">
-          Blue Print
-        </h2>
-        <div className="flex justify-center flex-wrap gap-2 sm:gap-6 mt-1 sm:mt-3 text-[10px] sm:text-sm font-bold text-gray-700">
-          <span>Class: {blueprint.classLevel}</span>
-          <span>Subject: {blueprint.subject}</span>
-          {blueprint.examTerm && <span>Term: {blueprint.examTerm}</span>}
-          <span>Set: {blueprint.setId || 'A'}</span>
-          <span>Max Marks: {blueprint.totalMarks}</span>
+    <div ref={rootWrapperRef} className="flex flex-col space-y-2 sm:space-y-3 text-black w-full">
+      {/* Floating Ghost Indicator during Touch Drag */}
+      {touchGhost && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            left: touchGhost.x,
+            top: touchGhost.y - 34,
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none',
+            zIndex: 9999,
+          }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full shadow-2xl border-2 text-xs font-extrabold tracking-wide ${
+            touchGhost.isOptionB
+              ? 'bg-fuchsia-600 text-white border-fuchsia-200'
+              : 'bg-indigo-600 text-white border-indigo-200'
+          }`}
+        >
+          <Move size={13} />
+          <span>{touchGhost.label}</span>
+        </div>,
+        document.body
+      )}
+
+      {/* Mobile Landscape Prompt Banner (shown if still in portrait on mobile) */}
+      {isMobileDevice && isPortrait && !dismissedRotateBanner && (
+        <div className="no-print flex items-center justify-between gap-2 bg-indigo-600 text-white px-3 py-2 rounded-xl shadow-md text-[11px]">
+          <div className="flex items-center gap-2 min-w-0">
+            <RotateCw size={15} className="shrink-0 animate-spin" style={{ animationDuration: '4s' }} />
+            <span className="font-semibold leading-tight">
+              ஒன்-லுக் பார்வைக்கு லேன்ட்ஸ்கேப் மோடிற்கு மாற்றவும்
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleToggleLandscapeFullscreen}
+              className="bg-white text-indigo-700 font-extrabold px-2.5 py-1 rounded-lg text-[10px] shadow-xs active:scale-95"
+            >
+              Landscape
+            </button>
+            <button
+              type="button"
+              onClick={() => setDismissedRotateBanner(true)}
+              className="p-1 text-indigo-100 hover:text-white"
+              aria-label="Dismiss"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Compact Header + Mobile Landscape Fullscreen Toggle */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <h2 className="text-sm sm:text-lg font-black uppercase tracking-wider border-b-2 border-slate-900 pb-0.5">
+            Blue Print
+          </h2>
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[10px] sm:text-xs font-bold text-slate-600">
+            <span>Class: {blueprint.classLevel}</span>
+            <span>· {blueprint.subject}</span>
+            {blueprint.examTerm && <span>· {blueprint.examTerm}</span>}
+            <span>· Set {blueprint.setId || 'A'}</span>
+            <span className="text-indigo-700">· {blueprint.totalMarks}M</span>
+          </div>
+        </div>
+
+        {/* Mobile / Compact View Controls */}
+        <div className="no-print flex items-center gap-1.5">
+          {!readOnly && (
+            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-slate-500 bg-slate-100 px-2 py-1 rounded-lg font-medium">
+              <GripVertical size={11} /> Drag · <Pencil size={10} /> Edit
+            </span>
+          )}
+          {isMobileDevice && (
+            <button
+              type="button"
+              onClick={handleToggleLandscapeFullscreen}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 text-white text-[10px] font-bold hover:bg-slate-800 active:scale-95 transition-all"
+              title="லேன்ட்ஸ்கேப் முழுத்திரை"
+            >
+              {isFullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+              <span>{isFullscreen ? 'Exit' : 'Landscape'}</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Summary Bar */}
+      {/* Compact Summary Bar */}
       <SummaryBar
         result={validation}
         totalMarks={blueprint.totalMarks}
@@ -2430,33 +3083,42 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
         isSaving={isSaving}
       />
 
-      {/* Matrix + Validation side-by-side */}
-      <div className="flex flex-col xl:flex-row gap-4 items-start w-full">
-        {/* Left side: Table + Summary */}
-        <div className="w-full xl:flex-1 flex flex-col gap-4">
-          {/* Matrix table container */}
-          <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white shadow-sm custom-scrollbar" id="matrix-scroll-container">
-            <table className="w-full text-[10px] border-collapse border border-gray-300 table-fixed">
+      {/* Matrix + Validation Side-by-Side */}
+      <div className="flex flex-col xl:flex-row gap-3 items-start w-full">
+        {/* Left: Fit-to-Screen One-Look Matrix Table + Collapsible Summaries */}
+        <div className="w-full xl:flex-1 flex flex-col gap-3 min-w-0">
+          <div
+            className="w-full overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm custom-scrollbar"
+            id="matrix-scroll-container"
+          >
+            <table className="w-full text-[10px] border-collapse border border-slate-300 table-fixed">
+              <colgroup>
+                <col style={{ width: columnWidths.num }} />
+                <col style={{ width: columnWidths.unit }} />
+                <col style={{ width: columnWidths.subUnit }} />
+                <col style={{ width: columnWidths.marks }} />
+                {sections.map(s => (
+                  <col key={s.id} style={{ width: columnWidths.section }} />
+                ))}
+              </colgroup>
+
               <thead>
                 <tr className="bg-slate-900 text-white">
-                  <th className="border border-slate-700 sm:p-1 p-0.5 sm:w-[2%] w-[4%] text-center">#</th>
-                  <th className="border border-slate-700 sm:p-1 p-0.5 text-left sm:w-[4%] w-[6%] text-[9px]">UNIT</th>
-                  <th className="border border-slate-700 sm:p-1 p-0.5 text-left sm:w-[20%] w-[8%] text-[9px] sm:text-[10px]">SUB UNIT</th>
-                  <th className="border border-slate-700 sm:p-1 p-0.5 text-center bg-amber-500 text-black font-black sm:w-[4%] w-[6%]">M</th>
-                  {sections.map(s => {
-                    const sectionWidth = Math.floor(70 / sections.length);
-                    return (
-                      <th key={s.id} style={{ width: `${sectionWidth}%` }} className="border border-slate-700 sm:p-1 p-0.5 text-center">
-                        <div className="font-black sm:text-[10px] text-[9px] leading-tight">{s.marks}M</div>
-                        <div className="sm:text-[7px] text-[6px] text-slate-400 font-bold uppercase tracking-tighter">({s.count} Q)</div>
-                        {s.optionCount > 0 && (
-                          <div className="sm:text-[7px] text-[6px] text-purple-400 font-bold tracking-tighter">OR:{s.optionCount}</div>
-                        )}
-                      </th>
-                    );
-                  })}
+                  <th className="border border-slate-700 p-0.5 sm:p-1 text-center text-[8px] sm:text-[10px]">#</th>
+                  <th className="border border-slate-700 p-0.5 sm:p-1 text-center text-[8px] sm:text-[9px]">UNIT</th>
+                  <th className="border border-slate-700 p-0.5 sm:p-1 text-left text-[8px] sm:text-[10px] truncate">SUB UNIT</th>
+                  <th className="border border-slate-700 p-0.5 sm:p-1 text-center bg-amber-500 text-black font-black text-[9px] sm:text-[10px]">M</th>
+                  {sections.map(s => (
+                    <th key={s.id} className="border border-slate-700 p-0.5 sm:p-1 text-center">
+                      <div className="font-black text-[9px] sm:text-[11px] leading-tight">{s.marks}M</div>
+                      <div className="text-[7px] sm:text-[8px] text-slate-300 font-semibold leading-tight">
+                        ({s.count}Q){s.optionCount > 0 ? <span className="text-purple-300 ml-0.5">OR:{s.optionCount}</span> : ''}
+                      </div>
+                    </th>
+                  ))}
                 </tr>
               </thead>
+
               <tbody>
                 {curriculum.units.map(unit => {
                   const unitPct = validation.analytics.unitTargets.find(target => target.unitId === unit.id)?.pct ?? 0;
@@ -2467,116 +3129,163 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
                         const subTotal = getSubUnitTotal(unit.id, subUnit.id);
                         const subPct = getSubUnitPercent(unit.id, subUnit.id);
                         return (
-                          <tr key={subUnit.id} className={`group/row transition-colors ${highlightedSubUnitId === subUnit.id ? 'bg-red-100 ring-1 ring-red-300' : 'hover:bg-slate-50'}`}>
+                          <tr
+                            key={subUnit.id}
+                            className={`group/row transition-colors ${
+                              highlightedSubUnitId === subUnit.id ? 'bg-red-100 ring-1 ring-red-300' : 'hover:bg-slate-50/80'
+                            }`}
+                          >
                             {sIdx === 0 && (
-                              <td rowSpan={unit.subUnits.length}
-                                className="border border-gray-200 sm:p-1 p-0.5 text-center font-black text-slate-400 bg-white align-middle sm:text-[10px] text-[8px]">
+                              <td
+                                rowSpan={unit.subUnits.length}
+                                className="border border-slate-200 p-0.5 text-center font-black text-slate-500 bg-slate-50/40 align-middle text-[8px] sm:text-[10px]"
+                              >
                                 {unit.unitNumber}
                               </td>
                             )}
                             {sIdx === 0 && (
-                              <td rowSpan={unit.subUnits.length}
-                                className="border border-gray-200 sm:p-0.5 p-0.2 text-center bg-white align-middle">
-                                <div className="flex flex-col items-center justify-center gap-1">
-                                  <div className="font-black text-indigo-800 [writing-mode:vertical-rl] rotate-180 py-0.5 sm:py-1 whitespace-nowrap sm:text-[7px] text-[11px] uppercase tracking-wider">
+                              <td
+                                rowSpan={unit.subUnits.length}
+                                title={`${unit.name} (${unitPct}%)`}
+                                onClick={() => showFullSubUnitName(`Unit ${unit.unitNumber} (${unitPct}%)`, unit.name)}
+                                className="border border-slate-200 p-0.5 text-center bg-white align-middle cursor-pointer overflow-hidden"
+                              >
+                                <div className="flex flex-col items-center justify-center gap-0.5 overflow-hidden">
+                                  <div className="font-black text-indigo-800 [writing-mode:vertical-rl] rotate-180 max-h-[68px] overflow-hidden text-ellipsis whitespace-nowrap text-[8px] sm:text-[9px] uppercase tracking-tight">
                                     {unit.name}
                                   </div>
-                                  <div className="text-[8px] sm:text-[7px] font-black text-indigo-600 sm:text-indigo-500 bg-indigo-50 sm:bg-transparent px-1 rounded sm:p-0">{unitPct}%</div>
+                                  <div className="text-[7px] font-black text-indigo-600 bg-indigo-50 px-1 rounded leading-tight">
+                                    {unitPct}%
+                                  </div>
                                 </div>
                               </td>
                             )}
 
-                            {/* Sub-unit name + per-lesson progress */}
-                            <td className="border border-gray-200 sm:p-1 p-0.5 align-top bg-white/50">
-                              <div className="flex flex-col gap-0.5 items-center justify-center text-center">
-                                <div className="text-slate-600 font-medium sm:text-[10px] text-[11px] leading-tight tamil-font break-words sm:[writing-mode:horizontal-tb] sm:rotate-0 sm:whitespace-normal [writing-mode:vertical-rl] rotate-180 whitespace-nowrap py-1">
+                            {/* Sub-unit name: Resized compactly & clipped beyond 2 lines to preserve full mark grid space */}
+                            <td
+                              title={subUnit.name}
+                              onClick={() => showFullSubUnitName(unit.name, subUnit.name)}
+                              className="border border-slate-200 px-1 py-0.5 sm:p-1 align-middle bg-white/70 cursor-pointer overflow-hidden"
+                            >
+                              <div className="flex flex-col gap-0.5 min-w-0">
+                                <div
+                                  className="text-slate-700 font-semibold text-[8.5px] sm:text-[10px] leading-tight tamil-font overflow-hidden"
+                                  style={{
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                    maxHeight: '2.5em',
+                                    wordBreak: 'break-word',
+                                  }}
+                                >
                                   {subUnit.name}
                                 </div>
                                 {subTotal > 0 && (
-                                  <div className="flex flex-col sm:flex-row items-center gap-1 w-full mt-1">
-                                    <div className="flex-1 h-0.5 bg-indigo-100 rounded-full overflow-hidden sm:block hidden w-full">
-                                      <div className="h-full bg-indigo-500 rounded-full"
-                                        style={{ width: `${Math.min(subPct, 100)}%` }} />
+                                  <div className="flex items-center gap-1 w-full">
+                                    <div className="flex-1 h-1 bg-indigo-100 rounded-full overflow-hidden hidden sm:block">
+                                      <div
+                                        className="h-full bg-indigo-500 rounded-full"
+                                        style={{ width: `${Math.min(subPct, 100)}%` }}
+                                      />
                                     </div>
-                                    <span className="text-[8px] sm:text-[7px] font-black text-indigo-600 sm:text-indigo-500 bg-indigo-50 sm:bg-transparent px-1 rounded">{subPct}%</span>
+                                    <span className="text-[7px] font-black text-indigo-600 bg-indigo-50 px-1 rounded leading-tight shrink-0">
+                                      {subPct}%
+                                    </span>
                                   </div>
                                 )}
                               </div>
                             </td>
 
                             {/* Sub-unit marks total */}
-                            <td className="border border-gray-200 sm:p-1 p-0.5 text-center font-black bg-amber-50/30 text-slate-700 sm:text-[10px] text-[8px]">
+                            <td className="border border-slate-200 p-0.5 text-center font-black bg-amber-50/40 text-slate-700 text-[9px] sm:text-[10px]">
                               {subTotal || '-'}
                             </td>
 
-                            {/* Section cells */}
+                            {/* 5 Mark Grid Cells */}
                             {sections.map(section => {
                               const cellItems = getCellItems(unit.id, subUnit.id, section.id);
                               const optionBItems = getOptionBItems(unit.id, subUnit.id, section.id);
                               const cellKey = `${unit.id}:${subUnit.id}:${section.id}`;
+                              const isDropActive = dropTarget === cellKey;
                               return (
-                                <td key={section.id}
+                                <td
+                                  key={section.id}
                                   data-matrix-cell={cellKey}
-                                  className={`border border-gray-200 sm:p-0.5 p-0.2 align-top relative group/cell transition-colors ${dropTarget === cellKey ? 'bg-blue-50 ring-2 ring-blue-300' : ''}`}
+                                  className={`border border-slate-200 p-0.5 align-top relative group/cell transition-colors ${
+                                    isDropActive
+                                      ? 'bg-indigo-100/90 ring-2 ring-inset ring-indigo-500'
+                                      : draggingItemId
+                                        ? 'hover:bg-indigo-50/50'
+                                        : ''
+                                  }`}
                                   onDragOver={e => {
                                     handleDragOver(e);
                                     setDropTarget(cellKey);
                                   }}
-                                  onDragLeave={() => setDropTarget(current => current === cellKey ? null : current)}
-                                  onDrop={e => handleDrop(e, unit.id, subUnit.id, section.id)}>
-                                  <div className="space-y-0.5 relative sm:min-h-[2rem] min-h-[2.5rem] h-auto" style={{ overflow: 'visible' }}>
-                                    {cellItems.map(item => (
-                                      <div key={item.id} className="relative">
-                                        <ItemCard
-                                          item={item}
-                                          curriculum={curriculum}
-                                          discourses={discourses}
-                                          onTouchPointerDown={handleTouchPointerDown}
-                                          mobileGestures={mobileGestures}
-                                          readOnly={readOnly}
-                                          isEditing={editingItemId === item.id}
-                                          isActive={activeOptionGroupId === item.id}
-                                          isDragging={draggingItemId === item.id}
-                                          qNumber={questionNumbersMap.get(item.id)}
-                                          onEdit={() => setEditingItemId(item.id)}
-                                          onClose={() => setEditingItemId(null)}
-                                          onToggleActive={() => setActiveOptionGroupId(prev => prev === item.id ? null : item.id)}
-                                          onUpdate={onUpdateItem}
-                                          onRemove={onRemoveItem}
-                                          onDragStart={handleDragStart}
-                                          onDragEnd={handleDragEnd}
-                                        />
-                                      </div>
-                                    ))}
-                                    {optionBItems.map(item => (
-                                      <div key={`${item.id}-option-b`} className="relative">
-                                        <ItemCard
-                                          item={item}
-                                          curriculum={curriculum}
-                                          discourses={discourses}
-                                          onTouchPointerDown={handleTouchPointerDown}
-                                          mobileGestures={mobileGestures}
-                                          readOnly={readOnly}
-                                          isEditing={editingOptionBId === item.id}
-                                          isActive={activeOptionGroupId === item.id}
-                                          isDragging={draggingItemId === item.id}
-                                          renderAsOptionB
-                                          qNumber={questionNumbersMap.get(item.id)}
-                                          onEdit={() => setEditingOptionBId(item.id)}
-                                          onClose={() => setEditingOptionBId(null)}
-                                          onToggleActive={() => setActiveOptionGroupId(prev => prev === item.id ? null : item.id)}
-                                          onUpdate={onUpdateItem}
-                                          onRemove={onRemoveItem}
-                                          onDragStart={handleDragStart}
-                                          onDragEnd={handleDragEnd}
-                                        />
-                                      </div>
-                                    ))}
+                                  onDragLeave={() => setDropTarget(current => (current === cellKey ? null : current))}
+                                  onDrop={e => handleDrop(e, unit.id, subUnit.id, section.id)}
+                                >
+                                  <div className="space-y-1 relative min-h-[2rem] h-full flex flex-col justify-between">
+                                    <div className="space-y-1">
+                                      {cellItems.map(item => (
+                                        <div key={item.id} className="relative">
+                                          <ItemCard
+                                            item={item}
+                                            curriculum={curriculum}
+                                            discourses={effectiveDiscourses}
+                                            onTouchPointerDown={handleTouchPointerDown}
+                                            onTouchPointerUp={handleTouchPointerUp}
+                                            mobileGestures={mobileGestures}
+                                            readOnly={readOnly}
+                                            isEditing={editingItemId === item.id}
+                                            isActive={activeOptionGroupId === item.id}
+                                            isDragging={draggingItemId === item.id}
+                                            qNumber={questionNumbersMap.get(item.id)}
+                                            onEdit={() => setEditingItemId(item.id)}
+                                            onClose={() => setEditingItemId(null)}
+                                            onToggleActive={() => setActiveOptionGroupId(prev => (prev === item.id ? null : item.id))}
+                                            onUpdate={onUpdateItem}
+                                            onMoveItem={onMoveItem}
+                                            onRemove={onRemoveItem}
+                                            onDragStart={handleDragStart}
+                                            onDragEnd={handleDragEnd}
+                                          />
+                                        </div>
+                                      ))}
+                                      {optionBItems.map(item => (
+                                        <div key={`${item.id}-option-b`} className="relative">
+                                          <ItemCard
+                                            item={item}
+                                            curriculum={curriculum}
+                                            discourses={effectiveDiscourses}
+                                            onTouchPointerDown={handleTouchPointerDown}
+                                            onTouchPointerUp={handleTouchPointerUp}
+                                            mobileGestures={mobileGestures}
+                                            readOnly={readOnly}
+                                            isEditing={editingOptionBId === item.id}
+                                            isActive={activeOptionGroupId === item.id}
+                                            isDragging={draggingItemId === `${item.id}:b`}
+                                            renderAsOptionB
+                                            qNumber={questionNumbersMap.get(item.id)}
+                                            onEdit={() => setEditingOptionBId(item.id)}
+                                            onClose={() => setEditingOptionBId(null)}
+                                            onToggleActive={() => setActiveOptionGroupId(prev => (prev === item.id ? null : item.id))}
+                                            onUpdate={onUpdateItem}
+                                            onMoveItem={onMoveItem}
+                                            onRemove={onRemoveItem}
+                                            onDragStart={handleDragStart}
+                                            onDragEnd={handleDragEnd}
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
                                     {!readOnly && (
                                       <button
+                                        type="button"
                                         onClick={() => onAddItem?.(unit.id, subUnit.id, section.id)}
-                                        className="w-full text-[10px] text-slate-200 hover:text-indigo-500 hover:bg-indigo-50 border border-dashed border-slate-100 hover:border-indigo-200 rounded py-0 transition-all opacity-0 group/row:opacity-100 group/cell:opacity-100"
-                                        title="Add question">
+                                        className="w-full text-[10px] leading-none py-0.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 border border-dashed border-transparent hover:border-indigo-300 rounded transition-all opacity-40 lg:opacity-0 group-hover/cell:opacity-100"
+                                        title="வினா சேர்க்கவும்"
+                                      >
                                         +
                                       </button>
                                     )}
@@ -2588,9 +3297,9 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
                         );
                       })}
 
-                      {/* Unit total row */}
-                      <tr className="bg-indigo-50/50 text-indigo-900 font-black text-center text-[9px]">
-                        <td colSpan={3} className="border border-indigo-100 p-0.5 text-right uppercase tracking-widest pr-2 italic opacity-60">
+                      {/* Unit Total Row */}
+                      <tr className="bg-indigo-50/70 text-indigo-900 font-black text-center text-[8.5px] sm:text-[9px]">
+                        <td colSpan={3} className="border border-indigo-100 px-1.5 py-0.5 text-right uppercase tracking-wider italic opacity-75">
                           Unit {unit.unitNumber} Total:
                         </td>
                         <td className="border border-indigo-100 p-0.5 bg-amber-400 text-black font-black">
@@ -2601,7 +3310,7 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
                             .filter(i => i.unitId === unit.id && i.sectionId === s.id)
                             .reduce((acc, i) => acc + i.questionCount, 0);
                           return (
-                            <td key={s.id} className="border border-indigo-100 p-0.5 text-indigo-400">
+                            <td key={s.id} className="border border-indigo-100 p-0.5 text-indigo-600">
                               {count || ''}
                             </td>
                           );
@@ -2611,21 +3320,23 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
                   );
                 })}
 
-                {/* Grand Total row */}
-                <tr className="bg-slate-900 text-white font-black text-center text-[10px]">
-                  <td colSpan={3} className="border border-slate-700 p-2 text-right uppercase tracking-widest pr-4">
-                    Aggregates
+                {/* Grand Total Row */}
+                <tr className="bg-slate-900 text-white font-black text-center text-[9px] sm:text-[10px]">
+                  <td colSpan={3} className="border border-slate-700 px-2 py-1.5 text-right uppercase tracking-wider">
+                    Aggregates ({validation.grandTime}m)
                   </td>
-                  <td className={`border border-slate-700 p-2 ${validation.grandTotal === blueprint.totalMarks ? 'bg-green-500' : 'bg-red-500'} text-white`}>
+                  <td className={`border border-slate-700 p-1 ${validation.grandTotal === blueprint.totalMarks ? 'bg-green-500' : 'bg-red-500'} text-white`}>
                     {validation.grandTotal}
                   </td>
                   {sections.map(s => {
-                    const total = blueprint.items.filter(i => i.sectionId === s.id).reduce((acc, i) => acc + i.questionCount, 0);
-                    const totalM = blueprint.items.filter(i => i.sectionId === s.id).reduce((acc, i) => acc + i.totalMarks, 0);
+                    const secItems = blueprint.items.filter(i => i.sectionId === s.id);
+                    const total = secItems.reduce((acc, i) => acc + i.questionCount, 0);
+                    const totalM = secItems.reduce((acc, i) => acc + i.totalMarks, 0);
+                    const totalT = secItems.reduce((acc, i) => acc + (Number(i.time) || getDefaultQuestionTime(i.marksPerQuestion, i.questionCount)), 0);
                     return (
                       <td key={s.id} className="border border-slate-700 p-1 align-middle">
-                        <div className="text-[11px]">{total}</div>
-                        <div className="text-[8px] opacity-60 font-normal tracking-tighter">{totalM}M</div>
+                        <div className="text-[10px] sm:text-[11px] leading-tight">{total}</div>
+                        <div className="text-[7px] sm:text-[8px] opacity-70 font-normal leading-tight">{totalM}M·{totalT}m</div>
                       </td>
                     );
                   })}
@@ -2634,14 +3345,11 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
             </table>
           </div>
 
-          {/* Blueprint Summary Table directly under the table container */}
-          <div className="mt-0">
-            <BlueprintSummaryTable blueprint={blueprint} validation={validation} />
-          </div>
+          <BlueprintSummaryTable blueprint={blueprint} validation={validation} />
           <AnalyticsPanel result={validation} />
         </div>
 
-        {/* Validation panel - stays on the right on large screens */}
+        {/* Right: Validation Panel */}
         <div className="w-full xl:w-64 shrink-0">
           <ValidationPanel
             result={validation}

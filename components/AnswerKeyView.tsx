@@ -476,87 +476,10 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
     const subjectCode = isAT ? "AT" : "BT";
 
     const Header = () => (
-        <div style={{ pageBreakInside: 'avoid', breakInside: 'avoid', marginBottom: '20px', color: '#000' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', padding: '8px 10px', gap: '8px' }}>
-                <div style={{
-                    background: '#000000',
-                    color: '#ffffff',
-                    padding: '7px 13px',
-                    borderRadius: '2px',
-                    fontSize: '18pt',
-                    fontWeight: 'bold',
-                    fontFamily: "'Times New Roman', serif",
-                    flexShrink: 0,
-                    textAlign: 'center',
-                    whiteSpace: 'nowrap',
-                    alignSelf: 'flex-start',
-                    marginTop: '2px',
-                }}>
-                    {setLetter}
-                </div>
-
-                <div style={{ flex: 1, textAlign: 'center', lineHeight: '1.5' }}>
-                    <h1 style={{ margin: 0, fontFamily: "'TAU-Urai', serif", fontSize: '25pt', lineHeight: 1.2, fontWeight: 'bold' }}>
-                        சமக்ர சிக்ஷா கேரளம்
-                    </h1>
-                    <h2 style={{ margin: 0, fontFamily: "'TAU-Paalai', serif", fontSize: '19pt', lineHeight: 1.25, fontWeight: 'bold' }}>
-                        {renderTimesNewRomanNumbers(examTitle)}
-                    </h2>
-                    <h4 style={{ margin: 0, fontFamily: "'Times New Roman', serif", fontSize: '13pt', lineHeight: 1.25, fontWeight: 'bold' }}>
-                        {subjectEnglish}
-                    </h4>
-                    <h4 style={{ margin: 0, fontFamily: "'TAU-Paalai', serif", fontSize: '13pt', lineHeight: 1.25, fontWeight: 'bold' }}>
-                        {subjectTamil} (<span style={{ fontFamily: "'Times New Roman', serif" }}>{subjectCode}</span>)
-                    </h4>
-                </div>
-
-                <div style={{
-                    background: '#000000',
-                    color: '#ffffff',
-                    padding: '7px 13px',
-                    borderRadius: '2px',
-                    fontSize: '13pt',
-                    fontWeight: 'bold',
-                    fontFamily: "'Times New Roman', serif",
-                    flexShrink: 0,
-                    textAlign: 'center',
-                    whiteSpace: 'nowrap',
-                    alignSelf: 'flex-start',
-                    marginTop: '2px',
-                }}>
-                    {paperCodeGI}
-                </div>
-            </div>
-
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                padding: '10px 10px',
-                fontFamily: "'TAU-Paalai', serif",
-                fontSize: '11pt',
-            }}>
-                <div style={{ fontWeight: 'bold' }}>
-                    <div>நேரம்: <span className="english-font">90</span> நிமிடம்</div>
-                    <div>சிந்தனை நேரம்: <span className="english-font">15</span> நிமிடம்</div>
-                </div>
-                <div style={{ textAlign: 'right', fontWeight: 'bold' }}>
-                    <div>வகுப்பு: <span className="english-font">{blueprint.classLevel}</span></div>
-                    <div>மதிப்பெண்: {formatMarks(blueprint.totalMarks)}</div>
-                </div>
-            </div>
-
-            <div style={{
-                textAlign: 'center',
-                fontFamily: "'Times New Roman', serif",
-                fontSize: '11pt',
-                fontWeight: 'bold',
-                letterSpacing: '2px',
-                padding: '10px 0',
-                borderTop: '1px solid #000000',
-                borderBottom: '1px solid #000000',
-            }}>
-                ANSWER KEY &amp; SCORING INDICATORS
-            </div>
+        <div style={{ pageBreakInside: 'avoid', breakInside: 'avoid', marginBottom: '10px', color: '#000', textAlign: 'center', borderTop: '1px solid #000', borderBottom: '1px solid #000', padding: '6px 0' }}>
+            <h1 style={{ margin: 0, fontFamily: "'Times New Roman', serif", fontSize: '16pt', fontWeight: 'bold' }}>
+                Proforma for Scoring Key &amp; Marking Scheme
+            </h1>
         </div>
     );
 
@@ -571,27 +494,20 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
     );
 
     // ── Table rows ──────────────────────────────────────────────────────────
-    const allRowsJsx = sortedItems.map((item, index) => (
-        <tbody
-            key={item.id}
-            className={item.marksPerQuestion <= 2 ? 'avoid-break' : 'allow-break'}
-            style={item.marksPerQuestion <= 2 ? { pageBreakInside: 'avoid', breakInside: 'avoid' } : { pageBreakInside: 'auto', breakInside: 'auto' }}
-        >
-            {!item.hasInternalChoice ? (
-                <tr className="text-black">
-                    <QNoCell num={index + 1} />
-                    <td className="border border-black p-1 text-center font-bold english-font text-sm">{formatMarks(item.marksPerQuestion)}</td>
-                    <td className="border border-black p-1 text-left">
-                        {renderItemAnswerJsx(item)}
-                    </td>
-                    <td className="border border-black p-1 align-top text-black text-sm">
-                        {item.enableFurtherInfo && renderFurtherInfo(item.furtherInfo)}
-                    </td>
-                </tr>
-            ) : (
-                <>
-                    <tr className="text-black">
-                        <QNoCell num={index + 1} suffix="(அ)" />
+    const allRowsJsx = sortedItems.map((item, index) => {
+        const breakClass = item.marksPerQuestion <= 2 ? 'avoid-break' : 'allow-break';
+        const breakStyle = item.marksPerQuestion <= 2 
+            ? { pageBreakInside: 'avoid' as const, breakInside: 'avoid' as const } 
+            : { pageBreakInside: 'auto' as const, breakInside: 'auto' as const };
+        return (
+            <tbody
+                key={item.id}
+                className={breakClass}
+                style={breakStyle}
+            >
+                {!item.hasInternalChoice ? (
+                    <tr className={`text-black ${breakClass}`} style={breakStyle}>
+                        <QNoCell num={index + 1} />
                         <td className="border border-black p-1 text-center font-bold english-font text-sm">{formatMarks(item.marksPerQuestion)}</td>
                         <td className="border border-black p-1 text-left">
                             {renderItemAnswerJsx(item)}
@@ -600,20 +516,33 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
                             {item.enableFurtherInfo && renderFurtherInfo(item.furtherInfo)}
                         </td>
                     </tr>
-                    <tr className="text-black">
-                        <QNoCell num={index + 1} suffix="(ஆ)" />
-                        <td className="border border-black p-1 text-center font-bold english-font text-sm">{formatMarks(item.marksPerQuestionB ?? item.marksPerQuestion)}</td>
-                        <td className="border border-black p-1 text-left">
-                            {renderItemAnswerJsx(item, true)}
-                        </td>
-                        <td className="border border-black p-1 align-top text-black text-sm">
-                            {item.enableFurtherInfoB && renderFurtherInfo(item.furtherInfoB)}
-                        </td>
-                    </tr>
-                </>
-            )}
-        </tbody>
-    ));
+                ) : (
+                    <>
+                        <tr className={`text-black ${breakClass}`} style={breakStyle}>
+                            <QNoCell num={index + 1} suffix="(அ)" />
+                            <td className="border border-black p-1 text-center font-bold english-font text-sm">{formatMarks(item.marksPerQuestion)}</td>
+                            <td className="border border-black p-1 text-left">
+                                {renderItemAnswerJsx(item)}
+                            </td>
+                            <td className="border border-black p-1 align-top text-black text-sm">
+                                {item.enableFurtherInfo && renderFurtherInfo(item.furtherInfo)}
+                            </td>
+                        </tr>
+                        <tr className={`text-black ${breakClass}`} style={breakStyle}>
+                            <QNoCell num={index + 1} suffix="(ஆ)" />
+                            <td className="border border-black p-1 text-center font-bold english-font text-sm">{formatMarks(item.marksPerQuestionB ?? item.marksPerQuestion)}</td>
+                            <td className="border border-black p-1 text-left">
+                                {renderItemAnswerJsx(item, true)}
+                            </td>
+                            <td className="border border-black p-1 align-top text-black text-sm">
+                                {item.enableFurtherInfoB && renderFurtherInfo(item.furtherInfoB)}
+                            </td>
+                        </tr>
+                    </>
+                )}
+            </tbody>
+        );
+    });
 
     // ── Main render ─────────────────────────────────────────────────────────
     return (
@@ -752,7 +681,7 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
                 @media print {
                     @page {
                         size: A4 portrait;
-                        margin: 20mm 15mm 18mm 15mm;
+                        margin: 15mm 15mm 20mm 15mm;
                     }
                     body {
                         background: white !important;
@@ -781,16 +710,16 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
                         display: table-header-group !important;
                     }
                     tbody {
-                        page-break-inside: avoid !important;
-                        break-inside: avoid !important;
-                    }
-                    tbody.allow-break {
                         page-break-inside: auto !important;
                         break-inside: auto !important;
                     }
-                    tr {
+                    tr.avoid-break, tbody.avoid-break, .avoid-break {
                         page-break-inside: avoid !important;
                         break-inside: avoid !important;
+                    }
+                    tr.allow-break, tbody.allow-break, .allow-break {
+                        page-break-inside: auto !important;
+                        break-inside: auto !important;
                     }
                     .no-print {
                         display: none !important;
@@ -876,57 +805,11 @@ export const generateAnswerKeyPdfHtml = (
     const subjectCode = isAT ? "AT" : "BT";
 
     const headerHtml = `
-<div style="page-break-inside:avoid;break-inside:avoid;border:1px solid #000;margin-bottom:20px;color:#000;">
-
-  <!-- Row 1: Set | Title | PaperCode -->
-  <div style="display:flex;align-items:flex-start;padding:8px 10px;gap:8px;">
-    <div style="background:#000000;color:#ffffff;border-radius:2px;padding:6px 12px;
-                font-size:18pt;font-weight:bold;font-family:'Times New Roman',serif;
-                flex-shrink:0;text-align:center;white-space:nowrap;display:inline-block;align-self:flex-start;margin-top:2px;">
-      ${setLetter}
-    </div>
-    <div style="flex:1;text-align:center;line-height:1.5;">
-      <h1 style="margin:0;font-family:'TAU-Urai',serif;font-size:25pt;line-height:1.2;font-weight:bold;">
-        சமக்ர சிக்ஷா கேரளம்
-      </h1>
-      <h2 style="margin:0;font-family:'TAU-Paalai',serif;font-size:19pt;line-height:1.25;font-weight:bold;">
-        ${wrapTimesNewRomanNumbers(examTitle)}
-      </h2>
-      <h4 style="margin:0;font-family:'Times New Roman',serif;font-size:13pt;line-height:1.25;font-weight:bold;">
-        ${subjectEnglish}
-      </h4>
-      <h4 style="margin:0;font-family:'TAU-Paalai',serif;font-size:13pt;line-height:1.25;font-weight:bold;">
-        ${subjectTamil} (<span style="font-family:'Times New Roman',serif;">${subjectCode}</span>)
-      </h4>
-    </div>
-    <div style="background:#000000;color:#ffffff;border-radius:2px;padding:7px 13px;
-                font-size:13pt;font-weight:bold;font-family:'Times New Roman',serif;
-                flex-shrink:0;white-space:nowrap;text-align:center;display:inline-block;align-self:flex-start;margin-top:2px;">
-      ${paperCodeGI}
-    </div>
-  </div>
-
-  <!-- Row 2: Time / Class -->
-  <div style="display:flex;justify-content:space-between;padding:10px 10px;
-              font-family:'TAU-Paalai',serif;font-size:11pt;">
-    <div style="font-weight:bold;">
-      <div>நேரம்: <span style="font-family:'Times New Roman',serif;">90</span> நிமிடம்</div>
-      <div>சிந்தனை நேரம்: <span style="font-family:'Times New Roman',serif;">15</span> நிமிடம்</div>
-    </div>
-    <div style="text-align:right;font-weight:bold;">
-      <div>வகுப்பு: <span style="font-family:'Times New Roman',serif;">${blueprint.classLevel}</span></div>
-      <div>மதிப்பெண்: <span style="font-family:'Times New Roman',serif;">${fmtMarksStr(blueprint.totalMarks)}</span></div>
-    </div>
-  </div>
-
-  <!-- Row 3: Section title -->
-  <div style="text-align:center;font-family:'Times New Roman',serif;font-size:11pt;
-              font-weight:bold;letter-spacing:2px;padding:8px 0;border-top:1px solid #000000;border-bottom:1px solid #000000;">
-    ANSWER KEY &amp; SCORING INDICATORS
-  </div>
-
-</div>
-`;
+<div style="page-break-inside:avoid;break-inside:avoid;margin-bottom:10px;color:#000;text-align:center;border-top:1px solid #000;border-bottom:1px solid #000;padding:6px 0;">
+  <h1 style="margin:0;font-family:'Times New Roman',serif;font-size:16pt;font-weight:bold;">
+    Proforma for Scoring Key &amp; Marking Scheme
+  </h1>
+</div>`;
 
     // ── table header ─────────────────────────────────────────────────────────
     const tableHeaderHtml = `
@@ -964,14 +847,14 @@ export const generateAnswerKeyPdfHtml = (
         const furtherCell = (html: string) =>
             html ? `<div class="further-information-content tamil-font" style="font-family:'TAU-Paalai',serif;white-space:pre-wrap;">${html}</div>` : '';
 
-        const tbodyClass = item.marksPerQuestion <= 2
-            ? ' class="avoid-break"'
-            : ' class="allow-break"';
+        const breakClass = item.marksPerQuestion <= 2 ? 'avoid-break' : 'allow-break';
+        const tbodyClass = ` class="${breakClass}"`;
+        const trClass = ` class="${breakClass}"`;
 
         if (!item.hasInternalChoice) {
             return `
               <tbody${tbodyClass}>
-                <tr style="color:#000;min-height:30px;">
+                <tr${trClass} style="color:#000;min-height:30px;">
                   ${qNoTd(index + 1)}
                   <td style="border:1px solid #000;padding:4px;text-align:center;font-weight:bold;font-family:'Times New Roman',serif;font-size:13px;">${fmtMarksStr(item.marksPerQuestion)}</td>
                   <td style="border:1px solid #000;padding:4px;text-align:left;">${ansCell(ansA)}</td>
@@ -982,13 +865,13 @@ export const generateAnswerKeyPdfHtml = (
 
         return `
           <tbody${tbodyClass}>
-            <tr style="color:#000;min-height:30px;">
+            <tr${trClass} style="color:#000;min-height:30px;">
               ${qNoTd(index + 1, '(அ)')}
               <td style="border:1px solid #000;padding:4px;text-align:center;font-weight:bold;font-family:'Times New Roman',serif;font-size:13px;">${fmtMarksStr(item.marksPerQuestion)}</td>
               <td style="border:1px solid #000;padding:4px;text-align:left;">${ansCell(ansA)}</td>
               <td style="border:1px solid #000;padding:4px;vertical-align:top;font-size:13px;">${furtherCell(item.enableFurtherInfo ? furtherA : '')}</td>
             </tr>
-            <tr style="color:#000;min-height:30px;">
+            <tr${trClass} style="color:#000;min-height:30px;">
               ${qNoTd(index + 1, '(ஆ)')}
               <td style="border:1px solid #000;padding:4px;text-align:center;font-weight:bold;font-family:'Times New Roman',serif;font-size:13px;">${fmtMarksStr(marksB)}</td>
               <td style="border:1px solid #000;padding:4px;text-align:left;">${ansCell(ansB)}</td>
@@ -1008,7 +891,7 @@ export const generateAnswerKeyPdfHtml = (
     /* ── Page layout ── */
     @page {
       size: ${pageWidth} ${pageHeight};
-      margin: 20mm 15mm 18mm 15mm;
+      margin: 15mm 15mm 20mm 15mm;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -1024,12 +907,16 @@ export const generateAnswerKeyPdfHtml = (
     }
 
     /* ── Page break control ── */
-    .avoid-break {
+    tbody {
+      page-break-inside: auto;
+      break-inside: auto;
+    }
+    .avoid-break, tr.avoid-break, tbody.avoid-break {
       page-break-inside: avoid;
       break-inside: avoid;
     }
     /* Allow long rows (3+ mark questions) to break across pages naturally */
-    tbody.allow-break {
+    .allow-break, tr.allow-break, tbody.allow-break {
       page-break-inside: auto;
       break-inside: auto;
     }

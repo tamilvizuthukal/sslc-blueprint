@@ -23,7 +23,7 @@ interface Report2Props {
  * Features:
  * - Unified rendering for Print and Export
  * - Native table splitting with repeating headers
- * - Extreme width optimization for Learning Objectives
+ * - Expanded widths for columns 2-4 and fit-content widths for columns 5-end
  */
 export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
     const { itemRows } = data;
@@ -81,12 +81,12 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
     // Aggregates for bottom total rows (summing Option A properties of blueprint.items only, ensuring internal choice counts as 1 item)
     const columnTotals = React.useMemo(() => {
         const counts = {
-            cp: { CP1: 0, CP2: 0, CP3: 0, CP4: 0, CP5: 0, CP6: 0, CP7: 0 },
+            cp: { CP1: 0, CP2: 0, CP3: 0, CP4: 0, CP5: 0, CP6: 0 },
             levels: { B: 0, A: 0, P: 0 },
             formats: { SR1: 0, SR2: 0, CRS1: 0, CRS2: 0, CRL: 0 }
         };
         const scores = {
-            cp: { CP1: 0, CP2: 0, CP3: 0, CP4: 0, CP5: 0, CP6: 0, CP7: 0 },
+            cp: { CP1: 0, CP2: 0, CP3: 0, CP4: 0, CP5: 0, CP6: 0 },
             levels: { B: 0, A: 0, P: 0 },
             formats: { SR1: 0, SR2: 0, CRS1: 0, CRS2: 0, CRL: 0 }
         };
@@ -107,7 +107,7 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
                 const normFmt = normalizeFormatValue(item.itemFormat as string) as ItemFormat;
                 const fmtKey = formatDefinitions.find(d => d.value === normFmt)?.key;
 
-                if (cpKey) {
+                if (cpKey && cpKey !== 'CP7') {
                     counts.cp[cpKey as keyof typeof counts.cp] += item.questionCount;
                     scores.cp[cpKey as keyof typeof scores.cp] += score;
                 }
@@ -129,179 +129,184 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
         return { counts, scores, grandTime, grandItems, grandScore };
     }, [blueprint]);
 
-    // Extremely optimized column widths for A4 Landscape
+    const groupedItemRows = React.useMemo(() => {
+        const groups: (typeof itemRows)[] = [];
+        let currentGroup: typeof itemRows = [];
+
+        itemRows.forEach(row => {
+            if (row.isChoiceB) {
+                currentGroup.push(row);
+                groups.push(currentGroup);
+                currentGroup = [];
+            } else if (row.isChoiceA) {
+                if (currentGroup.length > 0) {
+                    groups.push(currentGroup);
+                }
+                currentGroup = [row];
+            } else {
+                if (currentGroup.length > 0) {
+                    groups.push(currentGroup);
+                    currentGroup = [];
+                }
+                groups.push([row]);
+            }
+        });
+        if (currentGroup.length > 0) {
+            groups.push(currentGroup);
+        }
+        return groups;
+    }, [itemRows]);
+
+    // Expanded column widths for columns 2 to 4 (Learning Objective, Unit, Sub Topic)
     const textColWidths = {
-        qNo: '35px',
-        unit: '110px', // Topic / Unit / Chapter
-        lo: '176px',   // Learning Objective column width adjusted small
-        subTopic: '90px'
-    };
-    
-    // Widths for data columns to fit content and headers
-    const dataColWidths = {
-        cp: '30px',
-        kl: '30px',
-        fmt: '38px',
-        items: '35px',
-        score: '35px',
-        time: '38px'
+        qNo: '1%',
+        lo: '32%',
+        unit: '26%',
+        subTopic: '24%'
     };
 
     const cellStyle = "border border-black p-0.5 text-center english-font";
     const headerStyle = "border border-black p-0.5 text-center font-bold bg-transparent";
+    
+    // Fit-to-content style for columns 5 to end
+    const compactDataCellStyle: React.CSSProperties = { 
+        width: '1%',
+        paddingLeft: '4px', 
+        paddingRight: '4px', 
+        whiteSpace: 'nowrap', 
+        textAlign: 'center' 
+    };
 
     return (
         <div className="report2-container w-full">
-            <div className="report-page bg-white p-[15mm] print:p-0 text-black shadow-lg mx-auto relative landscape">
-                
+            <div className="report-page bg-white p-[15mm] print:p-0 text-black shadow-lg mx-auto relative landscape"
+                 style={{ width: '297mm', boxSizing: 'border-box' }}>
                 <div style={{ breakAfter: 'avoid', pageBreakAfter: 'avoid' }}>
                     <ReportHeader blueprint={blueprint} sectionTitle="PART – II : ITEM-WISE ANALYSIS" orientation="landscape" />
                 </div>
-                <table className="w-full border-collapse border-2 border-black leading-tight mt-4" style={{ tableLayout: 'fixed', pageBreakBefore: 'avoid', breakBefore: 'avoid' }}>
+                <table className="w-full border-collapse border-2 border-black leading-tight mt-2" 
+                       style={{ tableLayout: 'auto', width: '100%', pageBreakBefore: 'avoid', breakBefore: 'avoid' }}>
                     <thead>
                         <tr className="bg-transparent">
-                            <th rowSpan={2} className="border border-black p-1 font-bold" style={{ width: textColWidths.qNo }}>Qn</th>
-                            <th rowSpan={2} className="border border-black p-1 font-bold" style={{ width: textColWidths.unit }}>Topic / Unit / Chapter</th>
-                            <th rowSpan={2} className="border border-black p-1 font-bold" style={{ width: textColWidths.lo }}>Learning Objective</th>
-                            <th rowSpan={2} className="border border-black p-1 font-bold" style={{ width: textColWidths.subTopic }}>Sub Topic</th>
+                            <th rowSpan={2} className="border border-black p-1 font-bold" style={{ width: textColWidths.qNo, whiteSpace: 'nowrap' }}>Qn</th>
+                            <th colSpan={3} className="border border-black p-1 font-bold">Content Area</th>
                             
-                            <th colSpan={7} className="border border-black p-1 font-bold">Cognitive Process</th>
-                            <th colSpan={3} className="border border-black p-1 font-bold">Level</th>
-                            <th colSpan={5} className="border border-black p-1 font-bold">Format</th>
+                            <th colSpan={3} className="border border-black p-1 font-bold" style={{ width: '1%', whiteSpace: 'nowrap' }}>Knowledge Level</th>
+                            <th colSpan={5} className="border border-black p-1 font-bold" style={{ width: '1%', whiteSpace: 'nowrap' }}>Item Format</th>
                             
-                            <th rowSpan={2} className="border border-black p-0.5 font-bold" style={{ width: dataColWidths.items, writingMode: 'vertical-rl', transform: 'rotate(180deg)', whiteSpace: 'nowrap', textAlign: 'center', verticalAlign: 'middle' }}>Items</th>
-                            <th rowSpan={2} className="border border-black p-0.5 font-bold" style={{ width: dataColWidths.score, writingMode: 'vertical-rl', transform: 'rotate(180deg)', whiteSpace: 'nowrap', textAlign: 'center', verticalAlign: 'middle' }}>Score</th>
-                            <th rowSpan={2} className="border border-black p-0.5 font-bold" style={{ width: dataColWidths.time, writingMode: 'vertical-rl', transform: 'rotate(180deg)', whiteSpace: 'nowrap', textAlign: 'center', verticalAlign: 'middle' }}>Time</th>
+                            <th rowSpan={2} className="border border-black p-1 font-bold" style={{ ...compactDataCellStyle, writingMode: 'vertical-rl', transform: 'rotate(180deg)', verticalAlign: 'middle' }}>Score</th>
+                            <th rowSpan={2} className="border border-black p-1 font-bold" style={{ ...compactDataCellStyle, writingMode: 'vertical-rl', transform: 'rotate(180deg)', verticalAlign: 'middle' }}>Time</th>
                         </tr>
                         <tr className="bg-transparent">
-                            {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => <th key={cp} className={headerStyle} style={{ width: dataColWidths.cp }}>{cp}</th>)}
-                            {['B', 'A', 'P'].map(kl => <th key={kl} className={headerStyle} style={{ width: dataColWidths.kl }}>{kl}</th>)}
-                            {['SR1', 'SR2', 'CRS1', 'CRS2', 'CRL'].map(fmt => <th key={fmt} className={headerStyle} style={{ width: dataColWidths.fmt }}>{fmt}</th>)}
+                            <th className={headerStyle} style={{ width: textColWidths.lo }}>Learning Objective</th>
+                            <th className={headerStyle} style={{ width: textColWidths.unit }}>Topic / Unit / Chapter</th>
+                            <th className={headerStyle} style={{ width: textColWidths.subTopic }}>Sub Topic</th>
+                            {['B', 'A', 'P'].map(kl => <th key={kl} className={headerStyle} style={compactDataCellStyle}>{kl}</th>)}
+                            {['SR1', 'SR2', 'CRS1', 'CRS2', 'CRL'].map(fmt => <th key={fmt} className={headerStyle} style={compactDataCellStyle}>{fmt}</th>)}
                         </tr>
                     </thead>
-                    <tbody>
-                        {itemRows.map((row, idx) => (
-                            <tr key={idx} className="bg-transparent">
-                                <td className="border border-black p-0.5 text-center font-bold english-font">{renderQNo(row.qNo)}</td>
-                                <td className="border border-black p-1 text-left leading-tight tamil-font" 
-                                    style={{ wordBreak: 'normal', overflowWrap: 'break-word', whiteSpace: 'normal' }}>
-                                    {row.unit}
-                                </td>
-                                <td className="border border-black p-1 text-left leading-tight tamil-font" 
-                                    style={{ 
-                                        wordBreak: 'normal', 
-                                        overflowWrap: 'break-word', 
-                                        whiteSpace: 'normal',
-                                        lineBreak: 'strict'
-                                    }}>
-                                    {row.learningObjective}
-                                </td>
-                                <td className="border border-black p-1 text-left leading-tight tamil-font" 
-                                    style={{ wordBreak: 'normal', overflowWrap: 'break-word', whiteSpace: 'normal' }}>
-                                    {row.subTopic}
-                                </td>
-                                
-                                {/* CP Columns */}
-                                {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => (
-                                    <td key={cp} className={cellStyle}>{row.cp[cp as keyof typeof row.cp]}</td>
-                                ))}
+                    {groupedItemRows.map((group, gIdx) => (
+                        <tbody key={gIdx} className="avoid-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                            {group.map((row, idx) => (
+                                <tr key={idx} className="bg-transparent avoid-break">
+                                    <td className="border border-black p-0.5 text-center font-bold english-font" style={{ width: textColWidths.qNo, whiteSpace: 'nowrap' }}>{renderQNo(row.qNo)}</td>
+                                    <td className="border border-black p-1 text-left leading-tight tamil-font" 
+                                        style={{ 
+                                            width: textColWidths.lo,
+                                            wordBreak: 'normal', 
+                                            overflowWrap: 'break-word', 
+                                            whiteSpace: 'normal',
+                                            lineBreak: 'strict'
+                                        }}>
+                                        {row.learningObjective}
+                                    </td>
+                                    <td className="border border-black p-1 text-left leading-tight tamil-font" 
+                                        style={{ width: textColWidths.unit, wordBreak: 'normal', overflowWrap: 'break-word', whiteSpace: 'normal' }}>
+                                        {row.unit}
+                                    </td>
+                                    <td className="border border-black p-1 text-left leading-tight tamil-font" 
+                                        style={{ width: textColWidths.subTopic, wordBreak: 'normal', overflowWrap: 'break-word', whiteSpace: 'normal' }}>
+                                        {row.subTopic}
+                                    </td>
+                                    
+                                    {/* KL Columns (5 to 7) */}
+                                    <td style={compactDataCellStyle} className={`${cellStyle} font-bold`}>{row.kl.basic}</td>
+                                    <td style={compactDataCellStyle} className={`${cellStyle} font-bold`}>{row.kl.average}</td>
+                                    <td style={compactDataCellStyle} className={`${cellStyle} font-bold`}>{row.kl.profound}</td>
 
-                                {/* KL Columns */}
-                                <td className={`${cellStyle} font-bold`}>{row.kl.basic}</td>
-                                <td className={`${cellStyle} font-bold`}>{row.kl.average}</td>
-                                <td className={`${cellStyle} font-bold`}>{row.kl.profound}</td>
+                                    {/* Format Columns (8 to 12) */}
+                                    <td style={compactDataCellStyle} className={cellStyle}>{row.fmt.SR1}</td>
+                                    <td style={compactDataCellStyle} className={cellStyle}>{row.fmt.SR2}</td>
+                                    <td style={compactDataCellStyle} className={cellStyle}>{row.fmt.CRS1}</td>
+                                    <td style={compactDataCellStyle} className={cellStyle}>{row.fmt.CRS2}</td>
+                                    <td style={compactDataCellStyle} className={cellStyle}>{row.fmt.CRL}</td>
 
-                                {/* Format Columns */}
-                                <td className={cellStyle}>{row.fmt.SR1}</td>
-                                <td className={cellStyle}>{row.fmt.SR2}</td>
-                                <td className={cellStyle}>{row.fmt.CRS1}</td>
-                                <td className={cellStyle}>{row.fmt.CRS2}</td>
-                                <td className={cellStyle}>{row.fmt.CRL}</td>
+                                    {/* Score & Time Columns (13 & 14) */}
+                                    {!row.isChoiceB && (
+                                        <>
+                                            <td rowSpan={row.isChoiceA ? 2 : 1} style={compactDataCellStyle} className={`${cellStyle} font-black bg-transparent`}>{formatMark(row.score)}</td>
+                                            <td rowSpan={row.isChoiceA ? 2 : 1} style={compactDataCellStyle} className={cellStyle}>{row.time}</td>
+                                        </>
+                                    )}
+                                </tr>
+                            ))}
+                        </tbody>
+                    ))}
 
-                                {!row.isChoiceB && (
-                                    <>
-                                        <td rowSpan={row.isChoiceA ? 2 : 1} className={`${cellStyle} font-bold bg-transparent`}>{row.items}</td>
-                                        <td rowSpan={row.isChoiceA ? 2 : 1} className={`${cellStyle} font-black bg-transparent`}>{formatMark(row.score)}</td>
-                                        <td rowSpan={row.isChoiceA ? 2 : 1} className={cellStyle}>{row.time}</td>
-                                    </>
-                                )}
-                            </tr>
-                        ))}
-
+                    {/* Total Item and Total Score */}
+                    <tbody className="avoid-break font-bold" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
                         {/* Total Item Row */}
-                        <tr className="bg-transparent font-bold" style={{ height: '36px' }}>
+                        <tr className="bg-transparent font-bold avoid-break" style={{ height: '36px' }}>
                             <td colSpan={4} className="border border-black p-2.5 text-center font-bold">Total Item</td>
                             
-                            {/* CP Item Totals */}
-                            {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => (
-                                <td key={cp} className="border border-black p-2.5 text-center english-font font-bold">
-                                    {columnTotals.counts.cp[cp as keyof typeof columnTotals.counts.cp] || ''}
-                                </td>
-                            ))}
-
                             {/* Level Item Totals */}
                             {['B', 'A', 'P'].map(kl => (
-                                <td key={kl} className="border border-black p-2.5 text-center english-font font-bold">
+                                <td key={kl} style={compactDataCellStyle} className="border border-black p-0.5 text-center english-font font-bold">
                                     {columnTotals.counts.levels[kl as keyof typeof columnTotals.counts.levels] || ''}
                                 </td>
                             ))}
 
                             {/* Format Item Totals */}
                             {['SR1', 'SR2', 'CRS1', 'CRS2', 'CRL'].map(fmt => (
-                                <td key={fmt} className="border border-black p-2.5 text-center english-font font-bold">
+                                <td key={fmt} style={compactDataCellStyle} className="border border-black p-0.5 text-center english-font font-bold">
                                     {columnTotals.counts.formats[fmt as keyof typeof columnTotals.counts.formats] || ''}
                                 </td>
                             ))}
 
-                            {/* Total Item Grand Total */}
-                            <td className="border border-black p-2.5 text-center english-font font-bold">
-                                {columnTotals.grandItems || ''}
-                            </td>
-
-                            {/* Total Score cell is empty in Total Item row */}
-                            <td className="border border-black bg-transparent"></td>
+                            {/* Score cell is empty in Total Item row */}
+                            <td style={compactDataCellStyle} className="border border-black bg-transparent"></td>
 
                             {/* Answering Time Grand Total */}
-                            <td className="border border-black p-2.5 text-center english-font font-bold">
+                            <td style={compactDataCellStyle} className="border border-black p-1 text-center english-font font-bold">
                                 {columnTotals.grandTime || ''}
                             </td>
                         </tr>
 
                         {/* Total Score Row */}
-                        <tr className="bg-transparent font-bold" style={{ height: '36px' }}>
+                        <tr className="bg-transparent font-bold avoid-break" style={{ height: '36px' }}>
                             <td colSpan={4} className="border border-black p-2.5 text-center font-bold">Total Score</td>
                             
-                            {/* CP Score Totals */}
-                            {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => (
-                                <td key={cp} className="border border-black p-2.5 text-center english-font font-bold">
-                                    {columnTotals.scores.cp[cp as keyof typeof columnTotals.scores.cp] || ''}
-                                </td>
-                            ))}
-
                             {/* Level Score Totals */}
                             {['B', 'A', 'P'].map(kl => (
-                                <td key={kl} className="border border-black p-2.5 text-center english-font font-bold">
+                                <td key={kl} style={compactDataCellStyle} className="border border-black p-0.5 text-center english-font font-bold">
                                     {columnTotals.scores.levels[kl as keyof typeof columnTotals.scores.levels] || ''}
                                 </td>
                             ))}
 
                             {/* Format Score Totals */}
                             {['SR1', 'SR2', 'CRS1', 'CRS2', 'CRL'].map(fmt => (
-                                <td key={fmt} className="border border-black p-2.5 text-center english-font font-bold">
+                                <td key={fmt} style={compactDataCellStyle} className="border border-black p-0.5 text-center english-font font-bold">
                                     {columnTotals.scores.formats[fmt as keyof typeof columnTotals.scores.formats] || ''}
                                 </td>
                             ))}
 
-                            {/* Total Item cell is blacked out / empty in Total Score row */}
-                            <td className="border border-black" style={{ backgroundColor: '#000000' }}></td>
-
                             {/* Total Score Grand Total */}
-                            <td className="border border-black p-2.5 text-center english-font font-black">
+                            <td style={compactDataCellStyle} className="border border-black p-1 text-center english-font font-black">
                                 {formatMark(columnTotals.grandScore)}
                             </td>
 
                             {/* Answering Time cell is empty in Total Score row */}
-                            <td className="border border-black bg-transparent"></td>
+                            <td style={compactDataCellStyle} className="border border-black bg-transparent"></td>
                         </tr>
                     </tbody>
                 </table>
@@ -364,8 +369,9 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
                     thead {
                         display: table-header-group !important;
                     }
-                    tr {
+                    tr, tbody.avoid-break {
                         page-break-inside: avoid !important;
+                        break-inside: avoid !important;
                     }
                     table {
                         page-break-inside: auto !important;

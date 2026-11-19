@@ -288,18 +288,12 @@ export const Report1: React.FC<Report1Props> = ({ blueprint, data }) => {
                     </table>
                     <div className="text-[10pt] mt-2 text-black leading-relaxed font-english">
                         <div className="font-bold mb-1 uppercase tracking-wider text-[10pt]">Index of Abbreviations:</div>
-                        <div className="grid grid-cols-2 gap-x-15 max-w-xl text-[10pt]">
-                            <div>
-                                <span className="font-bold w-[40px] inline-block">SR</span> -  Selected Response<br />
-                                <span className="font-bold w-[40px] inline-block">SR₁</span> -  Multiple Choice Items<br />
-                                <span className="font-bold w-[40px] inline-block">SR₂</span> -  Matching Items<br />
-                                <span className="font-bold w-[40px] inline-block">CRS</span> -  Constructed Response Short Answer
-                            </div>
-                            <div>
-                                <span className="font-bold w-[40px] inline-block">CRS₁</span> -  Very Short Answer<br />
-                                <span className="font-bold w-[40px] inline-block">CRS₂</span> -  Short Answer<br />
-                                <span className="font-bold w-[40px] inline-block">CRL</span> -  Constructed Response Long Answer (Essay)
-                            </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', columnGap: '24px', rowGap: '2px', maxWidth: '100%' }}>
+                            {[['SR', 'Selected Response'], ['CRS', 'Constructed Response Short Answer'], ['CRL', 'Constructed Response Long Answer'], ['MCI', 'Multiple Choice Items'], ['MI', 'Matching Item'], ['VSA', 'Very Short Answer'], ['SA', 'Short Answer'], ['E', 'Essay']].map(([abbr, description]) => (
+                                <div key={abbr} style={{ display: 'grid', gridTemplateColumns: '42px minmax(0, 1fr)', columnGap: '4px', whiteSpace: 'nowrap' }}>
+                                    <span className="font-bold">{abbr}</span><span>{description}</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
@@ -329,7 +323,7 @@ export const Report1: React.FC<Report1Props> = ({ blueprint, data }) => {
                                 }} className="font-english">
                                     {blueprint.items.some(i => i.hasInternalChoice) ? '✓' : ''}
                                 </div>
-                                <span style={{ fontWeight: '500' }} className="font-medium font-english text-[10pt]">33 – 35%</span>
+                                <span style={{ fontWeight: '500' }} className="font-medium font-english text-[10pt]">30 - 35%</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 <span style={{ width: '110px', display: 'inline-block' }}>Overall choice</span>

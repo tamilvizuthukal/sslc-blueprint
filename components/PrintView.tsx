@@ -97,10 +97,15 @@ const PrintView: React.FC<{ id: string }> = ({ id }) => {
             <style dangerouslySetInnerHTML={{ __html: `
                 @page {
                     size: ${paperSize === 'Legal' ? 'Legal' : 'A4'} ${orientation === 'l' ? 'landscape' : 'portrait'};
-                    margin: ${orientation === 'l' ? '15mm 15mm 20mm 15mm' : '20mm 15mm 20mm 15mm'};
+                    margin: ${orientation === 'l' ? '15mm 15mm 20mm 15mm' : '15mm 15mm 20mm 15mm'};
                 }
                 
-                body { margin: 0; padding: 0; background: white; }
+                body {
+                    margin: 0;
+                    padding: 0;
+                    background: white;
+                    font-family: 'Times New Roman', 'TAU-Paalai', serif;
+                }
 
                 .draft-watermark {
                     position: fixed;
@@ -127,6 +132,21 @@ const PrintView: React.FC<{ id: string }> = ({ id }) => {
                         overflow: visible !important;
                         display: block !important;
                     }
+
+                    .print-content, .report2-container {
+                        display: block !important;
+                        width: 100% !important;
+                    }
+
+                    .page-break-before {
+                        break-before: page !important;
+                        page-break-before: always !important;
+                    }
+
+                    .page-break-after {
+                        break-after: page !important;
+                        page-break-after: always !important;
+                    }
                     
                     /* Universal reset for natural document flow */
                     html, body, #root {
@@ -147,7 +167,17 @@ const PrintView: React.FC<{ id: string }> = ({ id }) => {
                         line-break: strict !important;
                     }
 
+                    body, html, p, span, div, td, th {
+                        font-family: 'Times New Roman', 'TAU-Paalai', serif !important;
+                    }
+
+                    h1, h2, h3, h4, .tamil-heading {
+                        font-family: 'Times New Roman', 'TAU-Urai', 'TAU-Paalai', serif !important;
+                        font-weight: bold !important;
+                    }
+
                     .tamil-font, [lang="ta"] {
+                        font-family: 'Times New Roman', 'TAU-Paalai', serif !important;
                         word-break: keep-all !important;
                         line-break: strict !important;
                         white-space: normal !important;
@@ -163,9 +193,14 @@ const PrintView: React.FC<{ id: string }> = ({ id }) => {
                         display: table-header-group !important;
                     }
 
-                    tr {
+                    tr.avoid-break, tbody.avoid-break, .avoid-break {
                         page-break-inside: avoid !important;
-                        page-break-after: auto !important;
+                        break-inside: avoid !important;
+                    }
+
+                    tbody.allow-break, tr.allow-break, .allow-break {
+                        page-break-inside: auto !important;
+                        break-inside: auto !important;
                     }
 
                     tbody {
